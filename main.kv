@@ -154,7 +154,7 @@
                 text: "<--"
                 size_hint: 0.2, 1
                 pos_hint: {"center_x": 0.13, "center_y": 0.5}
-                on_release: app.go_back("main")
+                on_release: app.stop()
 
         Label:
             text: "Это экран с категориями"
@@ -168,17 +168,40 @@
             size_hint_y: 1
 
 
+<CategoryButton@Button>:
+    size_hint_y: None
+    height: dp(50)
+    font_size: '18sp'
 
 <CategoriesWidget>:
-    RecycleView:
-        viewclass: "Label"
-        data: [{"text": cat, "size_hint_y": None, "height": dp(40), "font_size": '24sp', "color": (0, 0, 0, 1)} for cat in root.output]
+    BoxLayout:
+        orientation: "vertical"
+        padding: dp(20)
+        spacing: dp(10)
 
-        RecycleBoxLayout:
-            default_size: None, dp(40)
-            default_size_hint: 1, None
+        Label:
+            id: message_label
+            text: "У вас нет категорий"
+            font_size: '22sp'
+            halign: "center"
+            valign: "middle"
+            text_size: self.size
+            color: 0, 0, 0, 1
             size_hint_y: None
-            height: self.minimum_height
-            orientation: "vertical"
-            padding: [0, 10, 0, 0]
-            anchor_y: 'top'
+            height: dp(40)
+            opacity: 1 if not rv.data else 0  # Убрали self.texture_size и root.ids
+            # Можно также просто делать visible/invisible через app логику
+
+        RecycleView:
+            id: rv
+            viewclass: "CategoryButton"
+            size_hint_y: 1
+            opacity: 1 if self.data else 0
+
+            RecycleBoxLayout:
+                default_size: None, dp(50)
+                default_size_hint: 1, None
+                size_hint_y: None
+                height: self.minimum_height
+                orientation: 'vertical'
+                spacing: dp(10)

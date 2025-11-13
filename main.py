@@ -48,10 +48,12 @@ def get_categories():
 class CategoriesWidget(FloatLayout):
     output = ListProperty([])
 
+    def on_output(self, instance, value):
+        self.ids.rv.data = [{'text': name} for name in value]
+
     def show_categories(self):
         rows = get_categories()
         self.output = [f"{cid}. {name}" for cid, name in rows]
-
 
 # --- Приложение Kivy ---
 class MainApp(App):
