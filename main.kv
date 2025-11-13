@@ -46,19 +46,6 @@
             on_release:
                 app.go_to("categories", "slide_left")
 
-        Button:
-            text: 'Просмотреть категории'
-            font_size: '14sp'
-            size_hint: 0.28, 0.14
-            pos_hint: {"center_x": 0.5, "center_y": 0.60}
-            text_size: self.width, None
-            halign: "center"
-            valign: "middle"
-            shorten: False
-            on_release:
-                app.go_to("categories", "slide_up")
-
-
         Label:
             text: 'У тебя все получится!'
             font_size: '30sp'
@@ -79,12 +66,12 @@
             pos_hint: {"center_x": 0.13, "center_y": 0.97}
             height: 50
             on_release:
-                app.go_back("categories")
+                app.go_back("main")
         Label:
             text: "Это экран с операциями"
             font_size: 24
             color: 0, 0, 0, 1
-
+            pos_hint: {"center_x": 0.5, "center_y": 0.5}
 <RecordScreen>:
     FloatLayout:
         canvas.before:
@@ -99,7 +86,7 @@
             pos_hint: {"center_x": 0.13, "center_y": 0.97}
             height: 50
             on_release:
-                app.go_back("main")
+                app.go_back("categories")
         Label:
             text: "Записать операцию"
             pos_hint: {"center_x": 0.5, "center_y": 0.9}
@@ -169,10 +156,10 @@
 
 
 <CategoryButton@Button>:
-    size_hint_y: None
-    height: dp(50)
     font_size: '18sp'
-    on_release: app.open_category_screen(self.category_id, self.text)
+    width: dp(100)
+    on_release:
+        app.open_category_screen(self.category_id, self.text)
 
 
 <CategoriesWidget>:
@@ -182,28 +169,21 @@
         spacing: dp(10)
 
         Label:
-            id: message_label
             text: "У вас нет категорий"
             font_size: '22sp'
             halign: "center"
             valign: "middle"
             text_size: self.size
-            color: 0, 0, 0, 1
             size_hint_y: None
             height: dp(40)
-            opacity: 1 if not rv.data else 0  # Убрали self.texture_size и root.ids
-            # Можно также просто делать visible/invisible через app логику
+            opacity: 1 if not rv.data else 0
 
         RecycleView:
             id: rv
             viewclass: "CategoryButton"
-            size_hint_y: 1
-            opacity: 1 if self.data else 0
-
             RecycleBoxLayout:
                 default_size: None, dp(50)
-                default_size_hint: 1, None
+                default_size_hint: None, None
                 size_hint_y: None
                 height: self.minimum_height
                 orientation: 'vertical'
-                spacing: dp(10)

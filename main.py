@@ -9,6 +9,8 @@ from kivy.lang import Builder
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.screenmanager import ScreenManager, Screen, SlideTransition, FadeTransition
 from kivy.properties import ListProperty, ObjectProperty
+from kivy.uix.label import Label
+
 
 DB_NAME = "data.db"
 
@@ -77,7 +79,7 @@ class MainApp(App):
             return
 
         # Иначе создаём новый экран на лету
-        new_screen = OperationScreen(name=f"cat_{category_id}")
+        new_screen = RecordScreen(name=f"cat_{category_id}")
         new_screen.category_id = category_id
         new_screen.category_name = category_name
 
@@ -140,9 +142,46 @@ class OperationScreen(Screen):
 
 
 class RecordScreen(Screen):
-    def send_text(self):
-        text = self.ids.operation.text
+    error_label = None  # для ошибок
+    success_label = None  # для успешного сообщения
 
+    def send_text(self):
+        text = self.ids.operation.text.strip()
+
+        # Удаляем старые сообщения, если есть
+        if self.error_label:
+            self.remove_widget(self.error_label)
+            self.error_label = None
+        if self.success_label:
+            self.remove_widget(self.success_label)
+            self.success_label = None
+
+        if not text:
+            # Показываем красное сообщение об ошибке
+            self.error_label = Label(
+                text="Поле не должно быть пустым",
+                color=(1, 0, 0, 1),  # красный
+                font_size='16sp',
+                size_hint=(None, None),
+                size=(self.ids.operation.width, 30),
+                pos=(self.ids.operation.x, self.ids.operation.y - 35)
+            )
+            self.add_widget(self.error_label)
+            return
+
+        # Если текст есть — выводим успешное сообщение
+        self.success_label = Label(
+            text=f"Операция '{text}' успешно добавлена в категорию",
+            color=(0, 1, 0, 1),  # зелёный
+            font_size='16sp',
+            size_hint=(None, None),
+            size=(self.ids.operation.width + 50, 30),
+            pos=(self.ids.operation.x, self.ids.operation.y - 35)
+        )
+        self.add_widget(self.success_label)
+
+        # Очищаем поле ввода
+        self.ids.operation.text = ""
 if __name__ == "__main__":
     init_db()
     MainApp().run()
