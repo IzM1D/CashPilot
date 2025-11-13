@@ -49,7 +49,11 @@ class CategoriesWidget(FloatLayout):
     output = ListProperty([])
 
     def on_output(self, instance, value):
-        self.ids.rv.data = [{'text': name} for name in value]
+        self.ids.rv.data = [
+            {"text": f"{cid}. {name}", "category_id": cid}
+            for cid, name in get_categories()
+        ]
+
 
     def show_categories(self):
         rows = get_categories()
@@ -61,6 +65,25 @@ class MainApp(App):
 
     def build(self):
         return RootWidget()
+
+    def open_category_screen(self, category_id, category_name):
+        print(f"Открыта категория {category_id}: {category_name}")
+
+        sm = self.root.ids.sm
+
+        # Если экран для этой категории уже создан — просто откроем
+        if f"cat_{category_id}" in sm.screen_names:
+            sm.current = f"cat_{category_id}"
+            return
+
+        # Иначе создаём новый экран на лету
+        new_screen = OperationScreen(name=f"cat_{category_id}")
+        new_screen.category_id = category_id
+        new_screen.category_name = category_name
+
+        sm.add_widget(new_screen)
+        sm.transition = SlideTransition(direction="left", duration=0.4)
+        sm.current = new_screen.name
 
     def go_to(self, screen_name, transition_type="slide_up"):
         sm = self.root.ids.sm
@@ -108,7 +131,13 @@ class MainScreen(Screen):
     pass
 
 class OperationScreen(Screen):
-    pass
+    category_id = None
+    category_name = None
+
+    def on_enter(self):
+        print(f"Экран категории {self.category_id} ({self.category_name})")
+        # Тут можно добавить логику — загрузку операций, суммы и т.д.
+
 
 class RecordScreen(Screen):
     def send_text(self):

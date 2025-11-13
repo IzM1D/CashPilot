@@ -79,12 +79,11 @@
             pos_hint: {"center_x": 0.13, "center_y": 0.97}
             height: 50
             on_release:
-                app.go_back("main")
+                app.go_back("categories")
         Label:
             text: "Это экран с операциями"
             font_size: 24
             color: 0, 0, 0, 1
-
 
 <RecordScreen>:
     FloatLayout:
@@ -154,7 +153,8 @@
                 text: "<--"
                 size_hint: 0.2, 1
                 pos_hint: {"center_x": 0.13, "center_y": 0.5}
-                on_release: app.stop()
+                on_release: 
+                    app.go_back("main")
 
         Label:
             text: "Это экран с категориями"
@@ -172,6 +172,8 @@
     size_hint_y: None
     height: dp(50)
     font_size: '18sp'
+    on_release: app.open_category_screen(self.category_id, self.text)
+
 
 <CategoriesWidget>:
     BoxLayout:
