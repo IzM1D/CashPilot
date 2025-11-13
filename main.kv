@@ -1,0 +1,184 @@
+<RootWidget>:
+
+    ScreenManager:
+        id: sm
+
+        MainScreen:
+            name: "main"
+        OperationScreen:
+            name: "operations"
+        RecordScreen:
+            name: "record"
+        CategoryScreen:
+            name: "categories"
+
+
+<MainScreen>:
+    FloatLayout:
+        canvas.before:
+            Color:
+                rgba: 1, 1, 1, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
+
+        Button:
+            text: 'Операции'
+            font_size: '14sp'
+            text_size: self.width, None
+            halign: "center"
+            valign: "middle"
+            shorten: False
+            size_hint: 0.28, 0.14
+            pos_hint: {"center_x": 0.25, "center_y": 0.8}
+            on_release:
+                app.go_to("operations", "slide_right")
+
+        Button:
+            text: 'Записать операцию'
+            font_size: '14sp'
+            text_size: self.width, None
+            halign: "center"
+            valign: "middle"
+            shorten: False
+            size_hint: 0.28, 0.14
+            pos_hint: {"center_x": 0.75, "center_y": 0.8}
+            on_release:
+                app.go_to("categories", "slide_left")
+
+        Button:
+            text: 'Просмотреть категории'
+            font_size: '14sp'
+            size_hint: 0.28, 0.14
+            pos_hint: {"center_x": 0.5, "center_y": 0.60}
+            text_size: self.width, None
+            halign: "center"
+            valign: "middle"
+            shorten: False
+            on_release:
+                app.go_to("categories", "slide_up")
+
+
+        Label:
+            text: 'У тебя все получится!'
+            font_size: '30sp'
+            pos_hint: {"center_x": 0.5, "center_y": 0.40}
+            color: 0, 0, 0, 1
+
+<OperationScreen>:
+    FloatLayout:
+        canvas.before:
+            Color:
+                rgba: 1, 1, 1, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
+        Button:
+            text: "<--"
+            size_hint: 0.2, 0.05
+            pos_hint: {"center_x": 0.13, "center_y": 0.97}
+            height: 50
+            on_release:
+                app.go_back("main")
+        Label:
+            text: "Это экран с операциями"
+            font_size: 24
+            color: 0, 0, 0, 1
+
+
+<RecordScreen>:
+    FloatLayout:
+        canvas.before:
+            Color:
+                rgba: 1, 1, 1, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
+        Button:
+            text: "<--"
+            size_hint: 0.2, 0.05
+            pos_hint: {"center_x": 0.13, "center_y": 0.97}
+            height: 50
+            on_release:
+                app.go_back("main")
+        Label:
+            text: "Записать операцию"
+            pos_hint: {"center_x": 0.5, "center_y": 0.9}
+            font_size: 24
+            color: 0, 0, 0, 1
+
+        TextInput:
+            id: operation
+            hint_text: 'Впишите операцию'
+            pos_hint: {"center_x": 0.4, "center_y": 0.45}
+            size_hint: 0.5, 0.07
+
+        Button:
+            id: Input
+            text: "Ввод"
+            size_hint: 0.17, 0.07
+            pos_hint: {"center_x": 0.75, "center_y": 0.45}
+            height: 50
+            on_press:
+                root.send_text()
+
+        ToggleButton:
+            text: 'Доход'
+            group: 'record'
+            size_hint: 0.3, 0.1
+            pos_hint: {'center_x': 0.3, 'center_y': 0.35}
+
+        ToggleButton:
+            text: 'Расход'
+            group: 'record'
+            size_hint: 0.3, 0.1
+            pos_hint: {'center_x': 0.7, 'center_y': 0.35}
+
+<CategoryScreen>:
+    BoxLayout:
+        orientation: "vertical"
+        padding: 20
+        spacing: 10
+
+        canvas.before:
+            Color:
+                rgba: 1, 1, 1, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
+
+        FloatLayout:
+            size_hint_y: None
+            height: dp(50)
+            Button:
+                text: "<--"
+                size_hint: 0.2, 1
+                pos_hint: {"center_x": 0.13, "center_y": 0.5}
+                on_release: app.go_back("main")
+
+        Label:
+            text: "Это экран с категориями"
+            size_hint_y: None
+            height: dp(40)
+            font_size: '21sp'
+            color: 0, 0, 0, 1
+
+        CategoriesWidget:
+            id: category_widget
+            size_hint_y: 1
+
+
+
+<CategoriesWidget>:
+    RecycleView:
+        viewclass: "Label"
+        data: [{"text": cat, "size_hint_y": None, "height": dp(40), "font_size": '24sp', "color": (0, 0, 0, 1)} for cat in root.output]
+
+        RecycleBoxLayout:
+            default_size: None, dp(40)
+            default_size_hint: 1, None
+            size_hint_y: None
+            height: self.minimum_height
+            orientation: "vertical"
+            padding: [0, 10, 0, 0]
+            anchor_y: 'top'
