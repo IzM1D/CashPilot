@@ -51,15 +51,38 @@ class CategoriesWidget(FloatLayout):
     output = ListProperty([])
 
     def on_output(self, instance, value):
-        self.ids.rv.data = [
+        # попытка найти RecycleView в self.ids
+        rv = self.ids.get("rv")
+        if not rv:
+            # ещё не создан — ничего не делаем (show_categories попробует снова)
+            return
+        rv.data = [
             {"text": f"{cid}. {name}", "category_id": cid}
             for cid, name in get_categories()
         ]
 
-
     def show_categories(self):
         rows = get_categories()
-        self.output = [f"{cid}. {name}" for cid, name in rows]
+        print("get_categories returned:", rows)
+
+        # установка текста в зависимости от количества категорий
+        info = self.ids.get("info_label")
+        if info:
+            if len(rows) == 0:
+                info.text = "У вас нет категорий"
+            else:
+                info.text = f"У вас {len(rows)} категори(й)"  # можно улучшить склонение
+
+        data = [{"text": f"{cid}. {name}", "category_id": cid} for cid, name in rows]
+
+        rv = self.ids.get("rv")
+        if rv:
+            rv.data = data
+            print("rv.data set, length:", len(rv.data))
+        else:
+            self.output = [f"{cid}. {name}" for cid, name in rows]
+
+
 
 # --- Приложение Kivy ---
 class MainApp(App):
@@ -68,24 +91,24 @@ class MainApp(App):
     def build(self):
         return RootWidget()
 
-    def open_category_screen(self, category_id, category_name):
+    def open_category_screen(self, category_id, category_name, direction="left"):
         print(f"Открыта категория {category_id}: {category_name}")
 
         sm = self.root.ids.sm
 
-        # Если экран для этой категории уже создан — просто откроем
         if f"cat_{category_id}" in sm.screen_names:
+            sm.transition = SlideTransition(direction=direction, duration=0.4)
             sm.current = f"cat_{category_id}"
             return
 
-        # Иначе создаём новый экран на лету
         new_screen = RecordScreen(name=f"cat_{category_id}")
         new_screen.category_id = category_id
         new_screen.category_name = category_name
 
         sm.add_widget(new_screen)
-        sm.transition = SlideTransition(direction="left", duration=0.4)
+        sm.transition = SlideTransition(direction=direction, duration=0.4)
         sm.current = new_screen.name
+
 
     def go_to(self, screen_name, transition_type="slide_up"):
         sm = self.root.ids.sm

@@ -13,6 +13,7 @@
             name: "categories"
 
 
+
 <MainScreen>:
     FloatLayout:
         canvas.before:
@@ -86,7 +87,7 @@
             pos_hint: {"center_x": 0.13, "center_y": 0.97}
             height: 50
             on_release:
-                app.go_back("categories")
+                app.go_to("categories", "slide_right")
         Label:
             text: "Записать операцию"
             pos_hint: {"center_x": 0.5, "center_y": 0.9}
@@ -120,70 +121,70 @@
             size_hint: 0.3, 0.1
             pos_hint: {'center_x': 0.7, 'center_y': 0.35}
 
-<CategoryScreen>:
-    BoxLayout:
-        orientation: "vertical"
-        padding: 20
-        spacing: 10
-
-        canvas.before:
-            Color:
-                rgba: 1, 1, 1, 1
-            Rectangle:
-                pos: self.pos
-                size: self.size
-
-        FloatLayout:
-            size_hint_y: None
-            height: dp(50)
-            Button:
-                text: "<--"
-                size_hint: 0.2, 1
-                pos_hint: {"center_x": 0.13, "center_y": 0.5}
-                on_release: 
-                    app.go_back("main")
-
-        Label:
-            text: "Это экран с категориями"
-            size_hint_y: None
-            height: dp(40)
-            font_size: '21sp'
-            color: 0, 0, 0, 1
-
-        CategoriesWidget:
-            id: category_widget
-            size_hint_y: 1
-
-
-<CategoryButton@Button>:
-    font_size: '18sp'
-    width: dp(100)
-    on_release:
-        app.open_category_screen(self.category_id, self.text)
-
-
 <CategoriesWidget>:
-    BoxLayout:
-        orientation: "vertical"
-        padding: dp(20)
-        spacing: dp(10)
+    canvas.before:
+        Color:
+            rgba: 1, 1, 1, 1
+        Rectangle:
+            pos: self.pos
+            size: self.size
 
+    FloatLayout:
+
+        # кнопка назад
+        Button:
+            text: "<--"
+            size_hint: 0.18, 0.06
+            pos_hint: {"x": 0.02, "top": 0.98}
+            on_release:
+                app.go_to("main", "slide_right")
+
+        # надпись "нет категорий"
         Label:
+            id: info_label
             text: "У вас нет категорий"
+            color: 0, 0, 0, 1
             font_size: '22sp'
             halign: "center"
             valign: "middle"
             text_size: self.size
-            size_hint_y: None
+            size_hint: 0.8, None
             height: dp(40)
-            opacity: 1 if not rv.data else 0
+            pos_hint: {"center_x": 0.5, "y": 0.86}
 
+        Button:
+            text: '+'
+            size_hint: 0.8, 0.07
+            pos_hint: {"center_x": 0.5, "center_y": 0.07}
+
+        # область для RecycleView
         RecycleView:
             id: rv
             viewclass: "CategoryButton"
+            size_hint: 0.8, 0.7      # ширина=80% экрана, высота=70%
+            pos_hint: {"center_x": 0.5, "y": 0.14}
+
             RecycleBoxLayout:
+                id: box
                 default_size: None, dp(50)
-                default_size_hint: None, None
+                default_size_hint: 1, None
                 size_hint_y: None
                 height: self.minimum_height
                 orientation: 'vertical'
+                spacing: dp(8)
+
+
+
+<CategoryButton@Button>:
+    font_size: '18sp'
+    size_hint_x: 1
+    size_hint_y: None
+    on_release:
+        app.open_category_screen(self.category_id, self.text, 'left')
+
+<CategoryScreen>:
+    id: category_screen
+
+    CategoriesWidget:
+        id: category_widget
+
