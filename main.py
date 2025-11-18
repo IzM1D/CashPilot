@@ -65,13 +65,28 @@ class CategoriesWidget(FloatLayout):
         rows = get_categories()
         print("get_categories returned:", rows)
 
+        # функция для правильного склонения слова "категория"
+        def pluralize_category(n):
+            if 11 <= n % 100 <= 14:
+                return "категорий"
+            last = n % 10
+            if last == 1:
+                return "категория"
+            elif last in (2, 3, 4):
+                return "категории"
+            else:
+                return "категорий"
+
         # установка текста в зависимости от количества категорий
         info = self.ids.get("info_label")
         if info:
             if len(rows) == 0:
                 info.text = "У вас нет категорий"
             else:
-                info.text = f"У вас {len(rows)} категори(й)"  # можно улучшить склонение
+                count = len(rows)
+                info.text = f"У вас {count} {pluralize_category(count)}"
+
+                
 
         data = [{"text": f"{cid}. {name}", "category_id": cid} for cid, name in rows]
 
@@ -155,6 +170,53 @@ class RootWidget(FloatLayout):
 class MainScreen(Screen):
     pass
 
+class AddCategoryScreen(Screen):
+    def add_category(self):
+        name = self.ids.category_input.text.strip()
+        msg = self.ids.msg_label
+
+        # поле пустое
+        if not name:
+            msg.text = "Ошибка: имя категории пустое"
+            msg.color = (1, 0, 0, 1)   # красный
+            msg.halign = "center"
+            msg.valign = "middle"
+            msg.text_size = msg.size
+
+            return
+
+        short_name = name[:13] + "..." if len(name) > 13 else name
+
+        conn, cur = get_db()
+        cur.execute("SELECT id FROM categories WHERE name = ?", (name,))
+        exists = cur.fetchone()
+
+        if exists:
+            msg.text = f"Ошибка: категория '{short_name}' уже существует"
+            msg.color = (1, 0, 0, 1)   # красный
+            msg.halign = "center"
+            msg.valign = "middle"
+            msg.text_size = msg.size
+
+        else:
+            cur.execute("INSERT INTO categories (name) VALUES (?)", (name,))
+            conn.commit()
+            msg.text = f"Категория '{short_name}' добавлена"
+            msg.color = (0, 1, 0, 1)   # зелёный
+            msg.halign = "center"
+            msg.valign = "middle"
+            msg.text_size = msg.size
+
+
+        cur.close()
+        conn.close()
+
+        # очищаем поле
+        self.ids.category_input.text = ""
+
+        # очищаем поле
+        self.ids.category_input.text = ""
+
 class OperationScreen(Screen):
     category_id = None
     category_name = None
@@ -205,6 +267,9 @@ class RecordScreen(Screen):
 
         # Очищаем поле ввода
         self.ids.operation.text = ""
+
+
+
 if __name__ == "__main__":
     init_db()
     MainApp().run()
