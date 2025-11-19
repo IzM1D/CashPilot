@@ -47,6 +47,13 @@ def get_categories():
 
     return rows
 
+def delete_category_from_db(category_id):
+    conn, cur = get_db()
+    cur.execute("DELETE FROM categories WHERE id = ?", (category_id,))
+    conn.commit()
+    cur.close()
+    conn.close()
+
 class CategoriesWidget(FloatLayout):
     output = ListProperty([])
 
@@ -63,7 +70,6 @@ class CategoriesWidget(FloatLayout):
 
     def show_categories(self):
         rows = get_categories()
-        print("get_categories returned:", rows)
 
         # функция для правильного склонения слова "категория"
         def pluralize_category(n):
@@ -77,7 +83,7 @@ class CategoriesWidget(FloatLayout):
             else:
                 return "категорий"
 
-        # установка текста в зависимости от количества категорий
+        # обновляем текст-инфо
         info = self.ids.get("info_label")
         if info:
             if len(rows) == 0:
@@ -86,16 +92,20 @@ class CategoriesWidget(FloatLayout):
                 count = len(rows)
                 info.text = f"У вас {count} {pluralize_category(count)}"
 
-                
-
-        data = [{"text": f"{cid}. {name}", "category_id": cid} for cid, name in rows]
+        # формируем данные для RecycleView:
+        # показываем порядковый номер (i+1) в тексте, но сохраняем реальный category_id
+        data = []
+        for i, (cid, name) in enumerate(rows):
+            display_text = f"{i+1}. {name}"   # порядковый номер в UI
+            data.append({"text": display_text, "category_id": cid})
 
         rv = self.ids.get("rv")
         if rv:
             rv.data = data
-            print("rv.data set, length:", len(rv.data))
         else:
-            self.output = [f"{cid}. {name}" for cid, name in rows]
+            # запасной путь — используем output
+            self.output = [f"{i+1}. {name}" for i, (_, name) in enumerate(rows)]
+
 
 
 
@@ -107,7 +117,6 @@ class MainApp(App):
         return RootWidget()
 
     def open_category_screen(self, category_id, category_name, direction="left"):
-        print(f"Открыта категория {category_id}: {category_name}")
 
         sm = self.root.ids.sm
 
@@ -157,6 +166,14 @@ class MainApp(App):
 
         sm.transition = SlideTransition(direction=opposite, duration=0.4)
         sm.current = screen_name
+
+    def delete_category(self, category_id):
+        delete_category_from_db(category_id)
+
+        # после удаления обновляем список категорий
+        screen = self.root.ids.sm.get_screen("categories")
+        widget = screen.ids.category_widget
+        widget.show_categories()
 
 class CategoryScreen(Screen):
     def on_enter(self):
@@ -222,8 +239,8 @@ class OperationScreen(Screen):
     category_name = None
 
     def on_enter(self):
-        print(f"Экран категории {self.category_id} ({self.category_name})")
-        # Тут можно добавить логику — загрузку операций, суммы и т.д.
+        pass
+        # Тут нужно логику — загрузку операций, суммы и т.д.
 
 
 class RecordScreen(Screen):
@@ -258,7 +275,7 @@ class RecordScreen(Screen):
         self.success_label = Label(
             text=f"Операция '{text}' успешно добавлена в категорию",
             color=(0, 1, 0, 1),  # зелёный
-            font_size='16sp',
+            font_size='24sp',
             size_hint=(None, None),
             size=(self.ids.operation.width + 50, 30),
             pos=(self.ids.operation.x, self.ids.operation.y - 35)

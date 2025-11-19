@@ -165,13 +165,13 @@
         RecycleView:
             id: rv
             viewclass: "CategoryButton"
-            size_hint: 0.8, 0.7      # ширина=80% экрана, высота=70%
-            pos_hint: {"center_x": 0.5, "y": 0.14}
+            size_hint: 0.95, 0.7      # ширина=80% экрана, высота=70%
+            pos_hint: {"center_x": 0.55, "y": 0.14}
 
             RecycleBoxLayout:
                 id: box
                 default_size: None, dp(50)
-                default_size_hint: 1, None
+                default_size_hint: 0.75, None
                 size_hint_y: None
                 height: self.minimum_height
                 orientation: 'vertical'
@@ -179,12 +179,30 @@
 
 
 
-<CategoryButton@Button>:
-    font_size: '18sp'
-    size_hint_x: 1
+<CategoryButton@FloatLayout>:
     size_hint_y: None
-    on_release:
-        app.open_category_screen(self.category_id, self.text, 'left')
+    height: dp(50)
+
+    category_id: 0
+    text: ""
+
+    # Кнопка категории
+    Button:
+        text: root.text
+        size_hint: 0.85, 1
+        pos_hint: {"x": 0, "y": 0}
+        on_release:
+            app.open_category_screen(root.category_id, root.text, 'left')
+
+    # Кнопка удаления
+    Button:
+        size_hint: 0.23, 1
+        pos_hint: {"right": 1.1, "y": 0}
+        background_normal: ''
+        background_color: 156/255, 156/255, 156/255, 1
+        on_release:
+            app.delete_category(root.category_id)
+
 
 <CategoryScreen>:
     id: category_screen
