@@ -5,14 +5,14 @@
 
         MainScreen:
             name: "main"
-        OperationScreen:
-            name: "operations"
         RecordScreen:
             name: "record"
         CategoryScreen:
             name: "categories"
         AddCategoryScreen:
             name: "addcategory"
+        HistoryScreen:
+            name: "history"
 
 
 
@@ -34,8 +34,8 @@
             shorten: False
             size_hint: 0.28, 0.14
             pos_hint: {"center_x": 0.25, "center_y": 0.8}
-            on_release:
-                app.go_to("operations", "slide_right")
+            on_release:    
+                app.open_categories_for_history()
 
         Button:
             text: 'Записать операцию'
@@ -47,7 +47,7 @@
             size_hint: 0.28, 0.14
             pos_hint: {"center_x": 0.75, "center_y": 0.8}
             on_release:
-                app.go_to("categories", "slide_left")
+                app.open_categories_for_record()
 
         Label:
             text: 'У тебя все получится!'
@@ -55,7 +55,9 @@
             pos_hint: {"center_x": 0.5, "center_y": 0.40}
             color: 0, 0, 0, 1
 
-<OperationScreen>:
+
+
+<HistoryScreen>:
     FloatLayout:
         canvas.before:
             Color:
@@ -63,18 +65,38 @@
             Rectangle:
                 pos: self.pos
                 size: self.size
+
         Button:
             text: "<--"
-            size_hint: 0.2, 0.05
-            pos_hint: {"center_x": 0.13, "center_y": 0.97}
-            height: 50
+            size_hint: 0.18, 0.06
+            pos_hint: {"x": 0.02, "top": 0.98}
             on_release:
-                app.go_back("main")
+                app.go_to("categories", "slide_left")
+
         Label:
-            text: "Это экран с операциями"
+            text: "История операций"
+            pos_hint: {"center_x": 0.5, "center_y": 0.9}
             font_size: 24
             color: 0, 0, 0, 1
-            pos_hint: {"center_x": 0.5, "center_y": 0.5}
+
+        ScrollView:
+            size_hint: 0.95, 0.75
+            pos_hint: {"center_x": 0.5, "center_y": 0.45}
+
+            BoxLayout:
+                id: history_box
+                orientation: "vertical"
+                size_hint_y: None
+                height: self.minimum_height
+                spacing: 10
+
+
+
+<MyToggleButton@ToggleButton>:
+    allow_no_selection: False
+
+
+
 <RecordScreen>:
     FloatLayout:
         canvas.before:
@@ -83,13 +105,14 @@
             Rectangle:
                 pos: self.pos
                 size: self.size
+
         Button:
             text: "<--"
-            size_hint: 0.2, 0.05
-            pos_hint: {"center_x": 0.13, "center_y": 0.97}
-            height: 50
+            size_hint: 0.18, 0.06
+            pos_hint: {"x": 0.02, "top": 0.98}
             on_release:
                 app.go_to("categories", "slide_right")
+
         Label:
             text: "Записать операцию"
             pos_hint: {"center_x": 0.5, "center_y": 0.9}
@@ -109,39 +132,40 @@
             pos_hint: {"center_x": 0.75, "center_y": 0.45}
             height: 50
             on_press:
-                root.send_text()
+                root.add_operation()
 
-        ToggleButton:
+        MyToggleButton:
+            id: income
             text: 'Доход'
             group: 'record'
             size_hint: 0.3, 0.1
             pos_hint: {'center_x': 0.3, 'center_y': 0.35}
 
-        ToggleButton:
+        MyToggleButton:
+            id: expense
             text: 'Расход'
             group: 'record'
             size_hint: 0.3, 0.1
             pos_hint: {'center_x': 0.7, 'center_y': 0.35}
 
+
+
 <CategoriesWidget>:
-    canvas.before:
-        Color:
-            rgba: 1, 1, 1, 1
-        Rectangle:
-            pos: self.pos
-            size: self.size
-
     FloatLayout:
+        canvas.before:
+            Color:
+                rgba: 1, 1, 1, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
 
-        # кнопка назад
         Button:
             text: "<--"
             size_hint: 0.18, 0.06
             pos_hint: {"x": 0.02, "top": 0.98}
             on_release:
-                app.go_to("main", "slide_right")
+                app.go_back_from_categories()
 
-        # надпись "нет категорий"
         Label:
             id: info_label
             text: "У вас нет категорий"
@@ -161,11 +185,10 @@
             on_release:
                 app.go_to("addcategory", "slide_left")
 
-        # область для RecycleView
         RecycleView:
             id: rv
             viewclass: "CategoryButton"
-            size_hint: 0.95, 0.7      # ширина=80% экрана, высота=70%
+            size_hint: 0.95, 0.7
             pos_hint: {"center_x": 0.55, "y": 0.14}
 
             RecycleBoxLayout:
@@ -186,15 +209,13 @@
     category_id: 0
     text: ""
 
-    # Кнопка категории
     Button:
         text: root.text
         size_hint: 0.85, 1
         pos_hint: {"x": 0, "y": 0}
         on_release:
-            app.open_category_screen(root.category_id, root.text, 'left')
+            app.category_selected(root.category_id, root.text)
 
-    # Кнопка удаления
     Button:
         size_hint: 0.23, 1
         pos_hint: {"right": 1.1, "y": 0}
@@ -204,11 +225,12 @@
             app.delete_category(root.category_id)
 
 
-<CategoryScreen>:
-    id: category_screen
 
-    CategoriesWidget:
-        id: category_widget
+<CategoryScreen>:
+    FloatLayout:
+        CategoriesWidget:
+            id: category_widget
+
 
 
 <AddCategoryScreen>:
@@ -253,8 +275,8 @@
             font_size: "24sp"
             size_hint_x: None
             pos_hint: {"center_x": 0.5, "center_y": 0.4}
-            width: "320dp"               # регулируем ширину
-            text_size: (self.width, "60dp")   # ← высота = максимум 2 строки
+            width: "320dp"
+            text_size: (self.width, "60dp")
             height: self.text_size[1]
             halign: "center"
             valign: "middle"

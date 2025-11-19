@@ -111,10 +111,14 @@ class CategoriesWidget(FloatLayout):
 
 # --- Приложение Kivy ---
 class MainApp(App):
-    last_transition = "up"  # по умолчанию
+    last_transition = "down"  # по умолчанию
 
     def build(self):
         return RootWidget()
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.last_entry_point = None
 
     def open_category_screen(self, category_id, category_name, direction="left"):
 
@@ -167,6 +171,19 @@ class MainApp(App):
         sm.transition = SlideTransition(direction=opposite, duration=0.4)
         sm.current = screen_name
 
+    def go_back_from_categories(self):
+        # если вход был через "операции" — хотим slide_right
+        if self.last_entry_point == "history":
+            direction = "slide_left"
+        # если вход был через "запись операции" — хотим slide_left
+        elif self.last_entry_point == "record":
+            direction = "slide_right"
+        else:
+            direction = "slide_left"
+
+        self.go_to("main", direction)
+
+
     def delete_category(self, category_id):
         delete_category_from_db(category_id)
 
@@ -174,6 +191,38 @@ class MainApp(App):
         screen = self.root.ids.sm.get_screen("categories")
         widget = screen.ids.category_widget
         widget.show_categories()
+
+    mode = "record"  # "record" или "history"
+
+    def open_categories_for_record(self):
+        self.mode = "record"
+        self.last_entry_point = "record"
+        self.go_to("categories", "slide_left")
+
+    def open_categories_for_history(self):
+        self.mode = "history"
+        self.last_entry_point = "history"
+        self.go_to("categories", "slide_right")
+
+
+    def category_selected(self, cat_id, cat_name):
+        sm = self.root.ids.sm
+
+        if self.mode == "record":
+            # Открываем экран записи операции
+            record = sm.get_screen("record")
+            record.category_id = cat_id
+            record.category_name = cat_name
+            self.go_to("record", "slide_left")
+
+        else:
+            # Открываем экран истории операций
+            history = sm.get_screen("history")
+            history.category_id = cat_id
+            history.category_name = cat_name
+            history.load_history()
+            self.go_to("history", "slide_right")
+
 
 class CategoryScreen(Screen):
     def on_enter(self):
@@ -238,14 +287,140 @@ class OperationScreen(Screen):
     category_id = None
     category_name = None
 
-    def on_enter(self):
-        pass
-        # Тут нужно логику — загрузку операций, суммы и т.д.
+    def on_pre_enter(self):
+        self.show_operations()
+
+    def show_operations(self):
+        from kivy.uix.label import Label
+        from kivy.uix.scrollview import ScrollView
+        from kivy.uix.boxlayout import BoxLayout
+
+        layout = self.ids.operations_layout
+        layout.clear_widgets()
+
+        if not self.category_id:
+            layout.add_widget(Label(text="Ошибка: нет категории"))
+            return
+
+        conn, cur = get_db()
+        cur.execute("""
+            SELECT amount_cents, type, created_at 
+            FROM operations 
+            WHERE category_id=? 
+            ORDER BY created_at DESC
+        """, (self.category_id,))
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        if not rows:
+            layout.add_widget(Label(
+                text="Операций пока нет",
+                color=(0, 0, 0, 1),
+                font_size=18
+            ))
+            return
+
+        for amount, type_op, dt in rows:
+            sign = "-" if amount < 0 else "+"
+            rub = abs(amount) // 100
+            kop = abs(amount) % 100
+
+            text = f"{dt} | {type_op.capitalize()} {sign}{rub}.{kop:02d}₽"
+
+            layout.add_widget(
+                Label(
+                    text=text,
+                    color=(0, 0, 0, 1),
+                    font_size=16,
+                    size_hint_y=None,
+                    height=30
+                )
+            )
 
 
 class RecordScreen(Screen):
-    error_label = None  # для ошибок
-    success_label = None  # для успешного сообщения
+    error_label = None
+    success_label = None
+    category_id = None
+    category_name = None
+
+    def add_operation(self):
+        # Удаляем старые сообщения
+        if self.error_label:
+            self.remove_widget(self.error_label)
+            self.error_label = None
+
+        if self.success_label:
+            self.remove_widget(self.success_label)
+            self.success_label = None
+
+        # 1. Получаем сумму
+        amount_text = self.ids.operation.text.strip()
+
+        if not amount_text:
+            self.error_label = Label(
+                text="Введите сумму",
+                color=(1, 0, 0, 1),
+                font_size='16sp',
+                size_hint=(None, None),
+                size=(self.ids.operation.width, 30),
+                pos=(self.ids.operation.x, self.ids.operation.y - 35)
+            )
+            self.add_widget(self.error_label)
+            return
+
+        # 2. Пробуем конвертировать в число
+        try:
+            amount_cents = int(Decimal(amount_text) * 100)
+        except:
+            self.error_label = Label(
+                text="Ошибка: введите число",
+                color=(1, 0, 0, 1),
+                font_size='16sp',
+                size_hint=(None, None),
+                size=(self.ids.operation.width, 30),
+                pos=(self.ids.operation.x, self.ids.operation.y - 35)
+            )
+            self.add_widget(self.error_label)
+            return
+
+        # 3. Определяем тип операции
+        if self.ids.income.state == "down":
+            type_op = "доход"
+        else:
+            type_op = "расход"
+            amount_cents = -abs(amount_cents)
+
+        # 4. Записываем в БД
+        conn, cur = get_db()
+        cur.execute(
+            "INSERT INTO operations(category_id, amount_cents, type) VALUES (?, ?, ?)",
+            (self.category_id, amount_cents, type_op)
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        # 5. Показываем зелёное сообщение
+        self.success_label = Label(
+            text=f"{type_op.capitalize()} добавлен",
+            color=(0, 1, 0, 1),
+            font_size='16sp',
+            size_hint=(None, None),
+            size=(self.ids.operation.width + 50, 30),
+            pos=(self.ids.operation.x, self.ids.operation.y - 35)
+        )
+        self.add_widget(self.success_label)
+
+        # 6. Чистим поле
+        self.ids.operation.text = ""
+
+
+    def on_enter(self):
+        # Активируем кнопку "Доход"
+        self.ids.income.state = "down"
+
 
     def send_text(self):
         text = self.ids.operation.text.strip()
@@ -284,6 +459,50 @@ class RecordScreen(Screen):
 
         # Очищаем поле ввода
         self.ids.operation.text = ""
+
+class HistoryScreen(Screen):
+    category_id = None
+    category_name = None
+
+    def load_history(self):
+        box = self.ids.history_box
+        box.clear_widgets()
+
+        conn, cur = get_db()
+        cur.execute("""
+            SELECT amount_cents, type, created_at
+            FROM operations
+            WHERE category_id=?
+            ORDER BY created_at DESC
+        """, (self.category_id,))
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        if not rows:
+            box.add_widget(Label(
+                text="Операций пока нет",
+                color=(0,0,0,1),
+                font_size=20,
+                size_hint_y=None,
+                height=40
+            ))
+            return
+
+        for amount, type_op, dt in rows:
+            sign = "-" if amount < 0 else "+"
+            rub = abs(amount) // 100
+            kop = abs(amount) % 100
+
+            text = f"{dt} | {type_op.capitalize()} {sign}{rub}.{kop:02d}₽"
+
+            box.add_widget(Label(
+                text=text,
+                color=(0,0,0,1),
+                size_hint_y=None,
+                height=40,
+                font_size=18
+            ))
 
 
 
