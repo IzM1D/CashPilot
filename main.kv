@@ -13,6 +13,8 @@
             name: "addcategory"
         HistoryScreen:
             name: "history"
+        OperationDetailScreen:
+            name: "operation_detail"
 
 
 
@@ -90,6 +92,27 @@
                 height: self.minimum_height
                 spacing: 10
 
+<OperationDetailScreen>:
+    FloatLayout:
+        canvas.before:
+            Color:
+                rgba: 1, 1, 1, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
+
+        Button:
+            text: "<--"
+            size_hint: 0.18, 0.06
+            pos_hint: {"x": 0.02, "top": 0.98}
+            on_release:
+                app.go_to("history", "slide_left")
+
+        Label:
+            text: root.operation_text
+            pos_hint: {"center_x": 0.5, "center_y": 0.5}
+            color: 0,0,0,1
+            font_size: '14sp'
 
 
 <MyToggleButton@ToggleButton>:

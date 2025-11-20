@@ -8,11 +8,16 @@ from kivy.app import App
 from kivy.lang import Builder
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.screenmanager import ScreenManager, Screen, SlideTransition, FadeTransition
-from kivy.properties import ListProperty, ObjectProperty
+from kivy.properties import ListProperty, ObjectProperty, StringProperty
 from kivy.uix.label import Label
-
+from kivy.uix.button import Button
+from kivy.metrics import dp
+from kivy.uix.floatlayout import FloatLayout
+from datetime import datetime, timezone, timedelta
 
 DB_NAME = "data.db"
+
+moscow_time = datetime.now(timezone(timedelta(hours=3)))
 
 # --- Работа с базой данных ---
 def get_db():
@@ -362,10 +367,10 @@ class RecordScreen(Screen):
             self.error_label = Label(
                 text="Введите сумму",
                 color=(1, 0, 0, 1),
-                font_size='16sp',
+                font_size='24sp',
                 size_hint=(None, None),
                 size=(self.ids.operation.width, 30),
-                pos=(self.ids.operation.x, self.ids.operation.y - 35)
+                pos_hint={"center_x": 0.5, "center_y": 0.6}
             )
             self.add_widget(self.error_label)
             return
@@ -377,10 +382,10 @@ class RecordScreen(Screen):
             self.error_label = Label(
                 text="Ошибка: введите число",
                 color=(1, 0, 0, 1),
-                font_size='16sp',
+                font_size='24sp',
                 size_hint=(None, None),
                 size=(self.ids.operation.width, 30),
-                pos=(self.ids.operation.x, self.ids.operation.y - 35)
+                pos_hint={"center_x": 0.5, "center_y": 0.6}
             )
             self.add_widget(self.error_label)
             return
@@ -392,24 +397,25 @@ class RecordScreen(Screen):
             type_op = "расход"
             amount_cents = -abs(amount_cents)
 
-        # 4. Записываем в БД
+        # 4. Записываем в БД с московским временем
         conn, cur = get_db()
         cur.execute(
-            "INSERT INTO operations(category_id, amount_cents, type) VALUES (?, ?, ?)",
-            (self.category_id, amount_cents, type_op)
+            "INSERT INTO operations(category_id, amount_cents, type, created_at) VALUES (?, ?, ?, ?)",
+            (self.category_id, amount_cents, type_op, moscow_time.isoformat(sep=" "))
         )
         conn.commit()
         cur.close()
         conn.close()
 
+
         # 5. Показываем зелёное сообщение
         self.success_label = Label(
             text=f"{type_op.capitalize()} добавлен",
             color=(0, 1, 0, 1),
-            font_size='16sp',
+            font_size='24sp',
             size_hint=(None, None),
             size=(self.ids.operation.width + 50, 30),
-            pos=(self.ids.operation.x, self.ids.operation.y - 35)
+            pos_hint={"center_x": 0.5, "center_y": 0.6}
         )
         self.add_widget(self.success_label)
 
@@ -438,24 +444,13 @@ class RecordScreen(Screen):
             self.error_label = Label(
                 text="Поле не должно быть пустым",
                 color=(1, 0, 0, 1),  # красный
-                font_size='16sp',
+                font_size='24sp',
                 size_hint=(None, None),
                 size=(self.ids.operation.width, 30),
-                pos=(self.ids.operation.x, self.ids.operation.y - 35)
+                pos_hint={"center_x": 0.5, "center_y": 0.6}
             )
             self.add_widget(self.error_label)
             return
-
-        # Если текст есть — выводим успешное сообщение
-        self.success_label = Label(
-            text=f"Операция '{text}' успешно добавлена в категорию",
-            color=(0, 1, 0, 1),  # зелёный
-            font_size='24sp',
-            size_hint=(None, None),
-            size=(self.ids.operation.width + 50, 30),
-            pos=(self.ids.operation.x, self.ids.operation.y - 35)
-        )
-        self.add_widget(self.success_label)
 
         # Очищаем поле ввода
         self.ids.operation.text = ""
@@ -464,13 +459,23 @@ class HistoryScreen(Screen):
     category_id = None
     category_name = None
 
+    def show_operation_detail(self, full_text):
+        app = App.get_running_app()
+        sm = app.root.ids.sm
+
+        screen = sm.get_screen("operation_detail")
+        screen.operation_text = full_text
+
+        app.go_to("operation_detail", "slide_right")
+
+
     def load_history(self):
         box = self.ids.history_box
         box.clear_widgets()
 
         conn, cur = get_db()
         cur.execute("""
-            SELECT amount_cents, type, created_at
+            SELECT id, amount_cents, type, created_at
             FROM operations
             WHERE category_id=?
             ORDER BY created_at DESC
@@ -482,27 +487,63 @@ class HistoryScreen(Screen):
         if not rows:
             box.add_widget(Label(
                 text="Операций пока нет",
-                color=(0,0,0,1),
+                color=(0, 0, 0, 1),
                 font_size=20,
                 size_hint_y=None,
                 height=40
             ))
             return
 
-        for amount, type_op, dt in rows:
+        app = App.get_running_app()
+
+        for op_id, amount, type_op, dt in rows:
+
+            # текст
             sign = "-" if amount < 0 else "+"
             rub = abs(amount) // 100
             kop = abs(amount) % 100
 
-            text = f"{dt} | {type_op.capitalize()} {sign}{rub}.{kop:02d}₽"
+            full_text = f"{dt} | {type_op.capitalize()} {sign}{rub}.{kop:02d}₽"
+            short_text = f"{sign}{rub}.{kop:02d}₽"
 
-            box.add_widget(Label(
-                text=text,
-                color=(0,0,0,1),
-                size_hint_y=None,
-                height=40,
-                font_size=18
-            ))
+            # ---- строка операции ----
+            row = FloatLayout(size_hint_y=None, height=dp(50))
+
+            # ---- основная кнопка ----
+            btn = Button(
+                text=short_text,
+                color=(1, 1, 1, 1),
+                size_hint=(0.85, None),   # как у категорий
+                height=dp(50),            # как у категорий
+                pos_hint={"x": 0}         # ровно как у CategoryButton
+            )
+            btn.bind(on_release=lambda instance, t=full_text: self.show_operation_detail(t))
+            row.add_widget(btn)
+
+            # ---- кнопка удаления (как в категориях) ----
+            del_btn = Button(
+                size_hint=(0.23, 1),
+                pos_hint={"right": 1.1},
+                background_normal='',
+                background_color=(156/255, 156/255, 156/255, 1)
+            )
+            del_btn.bind(on_release=lambda instance, id=op_id: self.delete_operation(id))
+            row.add_widget(del_btn)
+
+            box.add_widget(row)
+
+    def delete_operation(self, op_id):
+        conn, cur = get_db()
+        cur.execute("DELETE FROM operations WHERE id=?", (op_id,))
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        self.load_history()
+
+
+class OperationDetailScreen(Screen):
+    operation_text = StringProperty("")
 
 
 
