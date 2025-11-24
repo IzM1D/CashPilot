@@ -36,7 +36,7 @@
             shorten: False
             size_hint: 0.28, 0.14
             pos_hint: {"center_x": 0.25, "center_y": 0.8}
-            on_release:    
+            on_release:
                 app.open_categories_for_history()
 
         Button:
@@ -54,11 +54,37 @@
         Label:
             text: 'У тебя все получится!'
             font_size: '30sp'
-            pos_hint: {"center_x": 0.5, "center_y": 0.40}
+            pos_hint: {"center_x": 0.5, "center_y": 0.6}
             color: 0, 0, 0, 1
 
+        # Контейнер для диаграммы — по центру, чуть ниже заголовка
+        FloatLayout:
+            size_hint: None, None
+            size: dp(320), dp(320)
+            pos_hint: {"center_x": 0.5, "center_y": 0.35}
+
+            canvas.before:
+                Color:
+                    rgba: 1, 1, 1, 0
+                Rectangle:
+                    pos: self.pos
+                    size: self.size
+
+            Label:
+                text: 'Доходы'
+                font_size: '24sp'
+                pos_hint: {'center_x': 0.23, 'center_y': 0.65}
+                color: 0, 0, 0, 1
+
+            PieAnimatedChart:
+                id: pie_chart
+                size_hint: None, None
+                size: dp(200), dp(200)
+                pos_hint: {"center_x": 0.23, 'center_y': 0.3}
 
 
+
+# --- остальные экраны оставлены без изменений (копируем из присланного вами kv) ---
 <HistoryScreen>:
     FloatLayout:
         canvas.before:
@@ -81,16 +107,20 @@
             font_size: 24
             color: 0, 0, 0, 1
 
-        ScrollView:
+        RecycleView:
+            id: history_rv
+            viewclass: "OperationItem"
             size_hint: 0.95, 0.75
             pos_hint: {"center_x": 0.5, "center_y": 0.45}
 
-            BoxLayout:
-                id: history_box
-                orientation: "vertical"
+            RecycleBoxLayout:
+                default_size: None, dp(50)
+                default_size_hint: 1, None
                 size_hint_y: None
                 height: self.minimum_height
-                spacing: 10
+                orientation: "vertical"
+                spacing: dp(8)
+
 
 <OperationDetailScreen>:
     FloatLayout:
@@ -212,7 +242,7 @@
             id: rv
             viewclass: "CategoryButton"
             size_hint: 0.95, 0.7
-            pos_hint: {"center_x": 0.55, "y": 0.14}
+            pos_hint: {"center_x": 0.5, "top": 0.86}
 
             RecycleBoxLayout:
                 id: box
@@ -224,20 +254,43 @@
                 spacing: dp(8)
 
 
-
-<CategoryButton>:
+<OperationItem@FloatLayout>:
     size_hint_y: None
     height: dp(50)
 
+    op_id: 0
+    full_text: ""
+    short_text: ""
+
+    Button:
+        text: root.short_text
+        size_hint: 0.85, 1
+        pos_hint: {"x": 0, "y": 0}
+        on_release:
+            app.open_operation_detail(root.full_text)
+
+    Button:
+        size_hint: 0.23, 1
+        pos_hint: {"right": 1.1, "y": 0}
+        background_normal: ''
+        background_color: 156/255, 156/255, 156/255, 1
+        on_release:
+            app.delete_operation(root.op_id)
+
+
+<CategoryButton@FloatLayout>:
+    size_hint_y: None
+    height: dp(50)
+    bg_color: 1,1,1,1
     category_id: 0
     text: ""
 
     Button:
         text: root.text
+        background_normal: ''
+        background_color: root.bg_color
         size_hint: 0.85, 1
         pos_hint: {"x": 0, "y": 0}
-        background_normal: ""
-        background_color: root.color_rgba
         on_release:
             app.category_selected(root.category_id, root.text)
 
@@ -287,6 +340,13 @@
             multiline: False
             id: category_input
 
+        GridLayout:
+            id: color_grid
+            cols: 4
+            rows: 3
+            size_hint: 0.75, 0.2
+            pos_hint: {"center_x": 0.5, "center_y": 0.37}
+
         Button:
             id: addcategory
             text: 'Добавить'
@@ -294,13 +354,6 @@
             size_hint: 0.6, 0.08
             on_release:
                 root.add_category()
-
-        GridLayout:
-            id: color_grid
-            cols: 3
-            size_hint: 0.6, 0.12
-            pos_hint: {"center_x": 0.55, "center_y": 0.4}
-            spacing: dp(10)
 
         Label:
             id: msg_label

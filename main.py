@@ -2,30 +2,38 @@ from kivy.config import Config
 Config.set('graphics', 'width', '360')
 Config.set('graphics', 'height', '800')
 Config.write()
+
 import sqlite3
+import io
 from decimal import Decimal
+from datetime import datetime, timezone, timedelta
+
+# matplotlib + kivy image
+import matplotlib.pyplot as plt
+from kivy.core.image import Image as CoreImage
+from kivy.clock import Clock
+
 from kivy.app import App
 from kivy.lang import Builder
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.screenmanager import ScreenManager, Screen, SlideTransition, FadeTransition
-from kivy.properties import ListProperty, ObjectProperty, StringProperty
+from kivy.properties import ListProperty, ObjectProperty, StringProperty, NumericProperty
 from kivy.uix.label import Label
 from kivy.uix.button import Button
 from kivy.metrics import dp
-from kivy.uix.floatlayout import FloatLayout
-from datetime import datetime, timezone, timedelta
-
-
-def rgba_from_hex(hex_color):
-    hex_color = hex_color.lstrip('#')
-    r = int(hex_color[0:2], 16) / 255
-    g = int(hex_color[2:4], 16) / 255
-    b = int(hex_color[4:6], 16) / 255
-    return (r, g, b, 1)
+from kivy.utils import get_color_from_hex as HEX
+from kivy.uix.image import Image
+import numpy as np
+import matplotlib.patheffects as pe
 
 DB_NAME = "data.db"
 
-moscow_time = datetime.now(timezone(timedelta(hours=3)))
+CATEGORY_COLORS = [
+    "#808080", "#000000",
+    "#8B4513", "#FF0000", "#FFA500", "#FFFF00",
+    "#00FF00", "#008000", "#00FFFF",
+    "#0000FF", "#800080", "#FF00FF",
+]
 
 # --- Работа с базой данных ---
 def get_db():
@@ -36,10 +44,11 @@ def get_db():
 
 def init_db():
     conn, cur = get_db()
+
     cur.execute("""CREATE TABLE IF NOT EXISTS categories (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT UNIQUE,
-                    color TEXT DEFAULT '#ff0000'
+                    color TEXT DEFAULT '#000000'
                   );""")
     cur.execute("""CREATE TABLE IF NOT EXISTS operations (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -52,14 +61,15 @@ def init_db():
     cur.close()
     conn.close()
 
+
 def get_categories():
     conn, cur = get_db()
-    cur.execute("SELECT id, name, color FROM categories ORDER BY id;")
+    cur.execute("SELECT id, name, color FROM categories ORDER BY id")
     rows = cur.fetchall()
     cur.close()
     conn.close()
-    return rows
 
+    return rows
 
 def delete_category_from_db(category_id):
     conn, cur = get_db()
@@ -68,9 +78,92 @@ def delete_category_from_db(category_id):
     cur.close()
     conn.close()
 
+# ---------------------------
+# PieChart widget (matplotlib -> texture)
+# ---------------------------
+class PieChart(Image):
+    """
+    Image widget that draws a pie chart via matplotlib and sets its texture.
+    Метод draw(data) ожидает список записей (label, value, hex_color).
+    Если сумма значений == 0, рисует плоский круг-серый фон с надписью "Нет доходов".
+    """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # не анимируем автоматически — будем обновлять при входе на экран/по требованию
+
+    def draw(self, data, dpi=120, size_px=320):
+        """
+        data: list of tuples (label:str, value:float, hex_color:str)
+        size_px: итоговый размер в пикселях (ширина=высота)
+        """
+        total = sum([v for _, v, _ in data])
+        # подготовим фигуру
+        fig, ax = plt.subplots(figsize=(size_px/ dpi, size_px/ dpi), dpi=dpi)
+        fig.patch.set_alpha(0)  # прозрачный фон
+
+        if total <= 0 or len(data) == 0:
+            # пустой / нулевые данные — рисуем серый круг и текст
+            sizes = [1]
+            colors = ['#DDDDDD']
+            wedges, _ = ax.pie(sizes, colors=colors, startangle=90, counterclock=False,
+                               wedgeprops={'linewidth':0})
+            ax.set(aspect="equal")
+            ax.text(0, 0, "Нет\nдоходов", ha='center', va='center', fontsize=14)
+        else:
+            # уберём нулевые сектора (они не рисуются)
+            labels = []
+            sizes = []
+            colors = []
+            for lbl, val, hexc in data:
+                if val > 0:
+                    labels.append(lbl)
+                    sizes.append(val)
+                    colors.append(hexc if hexc else '#000000')
+
+            def autopct(pct):
+                # показываем проценты с одной цифрой после запятой, но только если >0.5%
+                return ('{:.1f}%'.format(pct)) if pct > 0.5 else ''
+
+            wedges, texts, autotexts = ax.pie(
+                sizes,
+                labels=None,  # подписи не пишем рядом — ставим только проценты на секторах
+                colors=colors,
+                startangle=90,
+                counterclock=False,
+                autopct=autopct,
+                pctdistance=0.75,
+                wedgeprops={'linewidth':0}
+            )
+            ax.set(aspect="equal")
+
+            # Внутренние подписи (при желании можно расположить легенду)
+            # Сделаем легенду справа с именами + суммы в рублях
+            legend_labels = []
+            for (lbl, val, _) in zip(labels, sizes, colors):
+                # но здесь zip неправильно — ниже пересоздадим из data
+                pass
+            # Создадим легенду из исходных списков:
+            legend_labels = [f"{labels[i]} — {sizes[i]/100:.2f}₽" for i in range(len(labels))]
+            ax.legend(wedges, legend_labels, loc="center left", bbox_to_anchor=(1, 0.5), fontsize=8)
+
+            # увеличим размер процентов
+            for t in autotexts:
+                t.set_fontsize(9)
+                t.set_color('white')
+                t.set_weight('bold')
+
+        # Сохранение в buffer и установка текстуры
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', transparent=True, bbox_inches='tight', pad_inches=0)
+        plt.close(fig)
+        buf.seek(0)
+        self.texture = CoreImage(buf, ext='png').texture
+
+# ---------------------------
+# Существующие классы приложения
+# ---------------------------
 class CategoriesWidget(FloatLayout):
     output = ListProperty([])
-    color_rgba = ListProperty([1,1,1,1])
 
     def on_output(self, instance, value):
         # попытка найти RecycleView в self.ids
@@ -79,9 +172,10 @@ class CategoriesWidget(FloatLayout):
             # ещё не создан — ничего не делаем (show_categories попробует снова)
             return
         rv.data = [
-            {"text": f"{cid}. {name}", "category_id": cid}
-            for cid, name in get_categories()
+            {"text": f"{cid}. {name}", "category_id": cid, "bg_color": HEX(color)}
+            for cid, name, color in get_categories()
         ]
+
 
     def show_categories(self):
         rows = get_categories()
@@ -108,17 +202,14 @@ class CategoriesWidget(FloatLayout):
                 info.text = f"У вас {count} {pluralize_category(count)}"
 
         # формируем данные для RecycleView:
-        # показываем порядковый номер (i+1) в тексте, но сохраняем реальный category_id
         data = []
         for i, (cid, name, color_hex) in enumerate(rows):
             display_text = f"{i+1}. {name}"
             data.append({
                 "text": display_text,
                 "category_id": cid,
-                "color_rgba": rgba_from_hex(color_hex)
+                "bg_color": HEX(color_hex)
             })
-
-
 
         rv = self.ids.get("rv")
         if rv:
@@ -127,50 +218,147 @@ class CategoriesWidget(FloatLayout):
             # запасной путь — используем output
             self.output = [f"{i+1}. {name}" for i, (_, name) in enumerate(rows)]
 
-class CategoryButton(FloatLayout):
-    category_id = 0
-    text = StringProperty("")
-    color_rgba = ListProperty([1, 1, 1, 1])
+class PieAnimatedChart(Image):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.progress = 0
+        self.fps = 1 / 120
+        self.speed = 0.1
+        self.values = []
+        self.colors = []
+        self.labels = []
+        self._anim_event = None
+
+    def start(self, values, colors, labels):
+        # сохраняем данные
+        self.values = values
+        self.colors = colors
+        self.labels = labels
+
+        # сбрасываем анимацию
+        self.progress = 0
+        if self._anim_event:
+            self._anim_event.cancel()
+
+        # запуск анимации
+        self._anim_event = Clock.schedule_interval(self._update, self.fps)
+
+    def _update(self, dt):
+        if self.progress >= 1:
+            self.progress = 1
+            self._draw(self.progress)
+            return False  # стоп анимации
+
+        self._draw(self.progress)
+        self.progress += self.speed
+
+    def _draw(self, progress):
+        if not self.values:
+            return
+
+        fig, ax = plt.subplots(figsize=(3.2, 3.2), dpi=100)
+        fig.patch.set_alpha(0)
+
+        total = sum(self.values)
+        if total == 0:
+            plt.close(fig)
+            return
+
+        # масштабируем значениями прогресса
+        scaled = [(v / total) * progress for v in self.values]
+
+        # гарантируем, что сектор не исчезает полностью
+        safe_scaled = [max(v, 0.0001) for v in scaled]
+
+        # добавляем ПРОЗРАЧНЫЙ остаток — ОТВЕЧАЕТ ЗА АНИМАЦИЮ
+        remainder = max(0, 1 - progress)
+        sizes = safe_scaled + [remainder]
+        colors = list(self.colors) + [(0, 0, 0, 0)]
+        labels = list(self.labels) + [""]
+
+        wedges, _ = ax.pie(
+            sizes,
+            colors=colors,
+            startangle=90,
+            counterclock=False,
+            labels=None,
+            wedgeprops={'linewidth': 0}
+        )
+
+        # --- подписи из второго варианта ---
+        for i, w in enumerate(wedges[:-1]):  # последний — прозрачный сектор
+            theta1, theta2 = w.theta1, w.theta2
+            theta_mid = (theta1 + theta2) / 2
+            ang = np.deg2rad(theta_mid)
+
+            r = 0.65
+            x = r * np.cos(ang)
+            y = r * np.sin(ang)
+
+            # название категории
+            ax.text(
+                x, y + 0.07, self.labels[i],
+                ha='center', va='center',
+                fontsize=11, color='white', weight='bold',
+                path_effects=[pe.withStroke(linewidth=1, foreground="black")]
+            )
+
+            # процент от полного массива (как во втором варианте)
+            pct = f"{100 * self.values[i] / total:.1f}%"
+            ax.text(
+                x, y - 0.08, pct,
+                ha='center', va='center',
+                fontsize=10, color='white', weight='bold',
+                path_effects=[pe.withStroke(linewidth=1, foreground="black")]
+            )
+
+        ax.set(aspect='equal')
+
+        buf = io.BytesIO()
+        plt.savefig(
+            buf, format='png',
+            transparent=True,
+            bbox_inches='tight',
+            pad_inches=0
+        )
+        plt.close(fig)
+
+        buf.seek(0)
+        self.texture = CoreImage(buf, ext='png').texture
 
 
 
-# --- Приложение Kivy ---
+
 class MainApp(App):
     last_transition = "down"  # по умолчанию
 
     def build(self):
+        # загрузим kv из файла main.kv (если есть)
+        Builder.load_file("main.kv")
         return RootWidget()
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.last_entry_point = None
 
+    # --- навигация (без изменений) ---
     def open_category_screen(self, category_id, category_name, direction="left"):
-
         sm = self.root.ids.sm
-
         if f"cat_{category_id}" in sm.screen_names:
             sm.transition = SlideTransition(direction=direction, duration=0.4)
             sm.current = f"cat_{category_id}"
             return
-
         new_screen = RecordScreen(name=f"cat_{category_id}")
         new_screen.category_id = category_id
         new_screen.category_name = category_name
-
         sm.add_widget(new_screen)
         sm.transition = SlideTransition(direction=direction, duration=0.4)
         sm.current = new_screen.name
 
-
     def go_to(self, screen_name, transition_type="slide_up"):
         sm = self.root.ids.sm
-
-        # Запоминаем направление
         if transition_type.startswith("slide_"):
             self.last_transition = transition_type.replace("slide_", "")
-
-        # Определяем тип перехода
         if transition_type == "fade":
             sm.transition = FadeTransition(duration=0.4)
         elif transition_type == "slide_up":
@@ -181,7 +369,6 @@ class MainApp(App):
             sm.transition = SlideTransition(direction="left", duration=0.4)
         elif transition_type == "slide_right":
             sm.transition = SlideTransition(direction="right", duration=0.4)
-
         sm.current = screen_name
 
     def go_back(self, screen_name):
@@ -192,27 +379,20 @@ class MainApp(App):
             "left": "right",
             "right": "left"
         }.get(self.last_transition, "up")
-
         sm.transition = SlideTransition(direction=opposite, duration=0.4)
         sm.current = screen_name
 
     def go_back_from_categories(self):
-        # если вход был через "операции" — хотим slide_right
         if self.last_entry_point == "history":
             direction = "slide_left"
-        # если вход был через "запись операции" — хотим slide_left
         elif self.last_entry_point == "record":
             direction = "slide_right"
         else:
             direction = "slide_left"
-
         self.go_to("main", direction)
-
 
     def delete_category(self, category_id):
         delete_category_from_db(category_id)
-
-        # после удаления обновляем список категорий
         screen = self.root.ids.sm.get_screen("categories")
         widget = screen.ids.category_widget
         widget.show_categories()
@@ -229,112 +409,128 @@ class MainApp(App):
         self.last_entry_point = "history"
         self.go_to("categories", "slide_right")
 
-
     def category_selected(self, cat_id, cat_name):
         sm = self.root.ids.sm
-
         if self.mode == "record":
-            # Открываем экран записи операции
             record = sm.get_screen("record")
             record.category_id = cat_id
             record.category_name = cat_name
             self.go_to("record", "slide_left")
-
         else:
-            # Открываем экран истории операций
             history = sm.get_screen("history")
             history.category_id = cat_id
             history.category_name = cat_name
             history.load_history()
             self.go_to("history", "slide_right")
 
+    def open_operation_detail(self, full_text):
+        sm = self.root.ids.sm
+        screen = sm.get_screen("operation_detail")
+        screen.operation_text = full_text
+        self.go_to("operation_detail", "slide_right")
 
-class CategoryScreen(Screen):
+    def delete_operation(self, op_id):
+        conn, cur = get_db()
+        cur.execute("DELETE FROM operations WHERE id=?", (op_id,))
+        conn.commit()
+        conn.close()
+        screen = self.root.ids.sm.get_screen("history")
+        screen.load_history()
+
+class AddCategoryScreen(Screen):
+    selected_color = "#000000"
     def on_enter(self):
-        if 'category_widget' in self.ids:
-            self.ids.category_widget.show_categories()
+        grid = self.ids.get("color_grid")
+        if not grid:
+            return
+        grid.clear_widgets()
+        for col in CATEGORY_COLORS:
+            btn = Button(
+                background_normal="",
+                background_color=HEX(col),
+                on_release=lambda b, c=col: self.select_color(c)
+            )
+            grid.add_widget(btn)
 
+    def select_color(self, color):
+        self.selected_color = color
+        print("Выбран цвет:", color)
+
+    def add_category(self):
+        name = self.ids.category_input.text.strip()
+        msg = self.ids.msg_label
+        if not name:
+            msg.text = "Ошибка: имя категории пустое"
+            msg.color = (1, 0, 0, 1)
+            msg.halign = "center"
+            msg.valign = "middle"
+            msg.text_size = msg.size
+            return
+        short_name = name[:13] + "..." if len(name) > 13 else name
+        conn, cur = get_db()
+        cur.execute("SELECT id FROM categories WHERE name = ?", (name,))
+        exists = cur.fetchone()
+        if exists:
+            msg.text = f"Ошибка: категория '{short_name}' уже существует"
+            msg.color = (1, 0, 0, 1)
+            msg.halign = "center"
+            msg.valign = "middle"
+            msg.text_size = msg.size
+        else:
+            cur.execute(
+                "INSERT INTO categories (name, color) VALUES (?, ?)",
+                (name, self.selected_color)
+            )
+            conn.commit()
+            msg.text = f"Категория '{short_name}' добавлена"
+            msg.color = (0, 1, 0, 1)
+            msg.halign = "center"
+            msg.valign = "middle"
+            msg.text_size = msg.size
+        cur.close()
+        conn.close()
+        self.ids.category_input.text = ""
+
+class CategoryButton(FloatLayout):
+    category_id = NumericProperty(0)
+    text = StringProperty("")
+    bg_color = ListProperty([0,0,0,1])
 
 class RootWidget(FloatLayout):
     pass
 
 class MainScreen(Screen):
-    pass
-
-class AddCategoryScreen(Screen):
-    selected_color = "#ff5555"
-    def add_category(self):
-        name = self.ids.category_input.text.strip()
-        msg = self.ids.msg_label
-
-        # поле пустое
-        if not name:
-            msg.text = "Ошибка: имя категории пустое"
-            msg.color = (1, 0, 0, 1)   # красный
-            msg.halign = "center"
-            msg.valign = "middle"
-            msg.text_size = msg.size
-
-            return
-
-        short_name = name[:13] + "..." if len(name) > 13 else name
-
-        conn, cur = get_db()
-        cur.execute("SELECT id FROM categories WHERE name = ?", (name,))
-        exists = cur.fetchone()
-
-        if exists:
-            msg.text = f"Ошибка: категория '{short_name}' уже существует"
-            msg.color = (1, 0, 0, 1)   # красный
-            msg.halign = "center"
-            msg.valign = "middle"
-            msg.text_size = msg.size
-
-        else:
-            cur.execute("INSERT INTO categories (name, color) VALUES (?, ?)", (name, self.selected_color))
-            conn.commit()
-            msg.text = f"Категория '{short_name}' добавлена"
-            msg.color = (0, 1, 0, 1)   # зелёный
-            msg.halign = "center"
-            msg.valign = "middle"
-            msg.text_size = msg.size
-
-
-        cur.close()
-        conn.close()
-
-        # очищаем поле
-        self.ids.category_input.text = ""
-
-        # очищаем поле
-        self.ids.category_input.text = ""
 
     def on_enter(self):
-        colors = [
-            "#ff5555", "#55ff55", "#5555ff",
-            "#ffcc00", "#ff8800", "#00cccc",
-        ]
+        Clock.schedule_once(self.animate_chart, 0)
 
-        grid = self.ids.color_grid
-        grid.clear_widgets()
+    def animate_chart(self, dt):
+        conn, cur = get_db()
+        cur.execute("""
+            SELECT c.name, c.color,
+                   COALESCE(SUM(CASE WHEN o.type='доход' THEN o.amount_cents ELSE 0 END), 0)
+            FROM categories c
+            LEFT JOIN operations o ON o.category_id = c.id
+            GROUP BY c.id
+        """)
+        rows = cur.fetchall()
+        conn.close()
 
-        for hex_color in colors:
-            r = int(hex_color[1:3], 16) / 255
-            g = int(hex_color[3:5], 16) / 255
-            b = int(hex_color[5:7], 16) / 255
+        rows = [r for r in rows if r[2] > 0]
 
-            btn = Button(
-                background_normal="",
-                background_color=(r, g, b, 1),
-                size_hint=(None, None),
-                size=(50, 50),
-                on_release=lambda instance, c=hex_color: self.set_color(c)
-            )
+        if not rows:
+            return
 
-            grid.add_widget(btn)
+        labels = [r[0] for r in rows]
+        colors = [r[1] for r in rows]
+        values = [r[2] for r in rows]
 
-    def set_color(self, color_hex):
-        self.selected_color = color_hex
+        chart = self.ids.get("pie_chart")
+        if chart:
+            chart.start(values, colors, labels)
+
+
+
 class OperationScreen(Screen):
     category_id = None
     category_name = None
@@ -390,8 +586,16 @@ class OperationScreen(Screen):
                 )
             )
 
+class CategoryScreen(Screen):
+    def on_enter(self):
+        self.ids.category_widget.show_categories()
 
 class RecordScreen(Screen):
+    def reset_buttons(self):
+        self.ids.income.state = "normal"
+        self.ids.expense.state = "normal"
+        self.ids.income.state = "down"
+
     error_label = None
     success_label = None
     category_id = None
@@ -446,14 +650,15 @@ class RecordScreen(Screen):
 
         # 4. Записываем в БД с московским временем
         conn, cur = get_db()
+        current_time = datetime.now(timezone(timedelta(hours=3)))
+
         cur.execute(
             "INSERT INTO operations(category_id, amount_cents, type, created_at) VALUES (?, ?, ?, ?)",
-            (self.category_id, amount_cents, type_op, moscow_time.isoformat(sep=" "))
+            (self.category_id, amount_cents, type_op, current_time.strftime("%Y-%m-%d %H:%M:%S"))
         )
         conn.commit()
         cur.close()
         conn.close()
-
 
         # 5. Показываем зелёное сообщение
         self.success_label = Label(
@@ -469,11 +674,12 @@ class RecordScreen(Screen):
         # 6. Чистим поле
         self.ids.operation.text = ""
 
+        self.reset_buttons()
 
     def on_enter(self):
         # Активируем кнопку "Доход"
         self.ids.income.state = "down"
-
+        self.reset_buttons()
 
     def send_text(self):
         text = self.ids.operation.text.strip()
@@ -515,10 +721,8 @@ class HistoryScreen(Screen):
 
         app.go_to("operation_detail", "slide_right")
 
-
     def load_history(self):
-        box = self.ids.history_box
-        box.clear_widgets()
+        rv = self.ids.history_rv
 
         conn, cur = get_db()
         cur.execute("""
@@ -528,71 +732,28 @@ class HistoryScreen(Screen):
             ORDER BY created_at DESC
         """, (self.category_id,))
         rows = cur.fetchall()
-        cur.close()
         conn.close()
 
-        if not rows:
-            box.add_widget(Label(
-                text="Операций пока нет",
-                color=(0, 0, 0, 1),
-                font_size=20,
-                size_hint_y=None,
-                height=40
-            ))
-            return
-
-        app = App.get_running_app()
+        data = []
 
         for op_id, amount, type_op, dt in rows:
-
-            # текст
             sign = "-" if amount < 0 else "+"
             rub = abs(amount) // 100
             kop = abs(amount) % 100
 
-            full_text = f"{dt} | {type_op.capitalize()} {sign}{rub}.{kop:02d}₽"
-            short_text = f"{sign}{rub}.{kop:02d}₽"
+            full = f"{dt} | {type_op.capitalize()} {sign}{rub}.{kop:02d}₽"
+            short = f"{sign}{rub}.{kop:02d}₽"
 
-            # ---- строка операции ----
-            row = FloatLayout(size_hint_y=None, height=dp(50))
+            data.append({
+                "op_id": op_id,
+                "full_text": full,
+                "short_text": short
+            })
 
-            # ---- основная кнопка ----
-            btn = Button(
-                text=short_text,
-                color=(1, 1, 1, 1),
-                size_hint=(0.85, None),   # как у категорий
-                height=dp(50),            # как у категорий
-                pos_hint={"x": 0}         # ровно как у CategoryButton
-            )
-            btn.bind(on_release=lambda instance, t=full_text: self.show_operation_detail(t))
-            row.add_widget(btn)
-
-            # ---- кнопка удаления (как в категориях) ----
-            del_btn = Button(
-                size_hint=(0.23, 1),
-                pos_hint={"right": 1.1},
-                background_normal='',
-                background_color=(156/255, 156/255, 156/255, 1)
-            )
-            del_btn.bind(on_release=lambda instance, id=op_id: self.delete_operation(id))
-            row.add_widget(del_btn)
-
-            box.add_widget(row)
-
-    def delete_operation(self, op_id):
-        conn, cur = get_db()
-        cur.execute("DELETE FROM operations WHERE id=?", (op_id,))
-        conn.commit()
-        cur.close()
-        conn.close()
-
-        self.load_history()
-
+        rv.data = data
 
 class OperationDetailScreen(Screen):
     operation_text = StringProperty("")
-
-
 
 if __name__ == "__main__":
     init_db()
