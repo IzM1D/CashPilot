@@ -1,30 +1,22 @@
 <RootWidget>:
+
     ScreenManager:
         id: sm
 
         MainScreen:
             name: "main"
-
         RecordScreen:
             name: "record"
-
         CategoryScreen:
             name: "categories"
-
         AddCategoryScreen:
             name: "addcategory"
-
         HistoryScreen:
             name: "history"
-
         OperationDetailScreen:
             name: "operation_detail"
 
 
-
-# ======================================================================
-#                               MAIN SCREEN
-# ======================================================================
 
 <MainScreen>:
     FloatLayout:
@@ -35,16 +27,16 @@
                 pos: self.pos
                 size: self.size
 
-        # --- Верхние две кнопки ---
         Button:
             text: 'Операции'
             font_size: '14sp'
             text_size: self.width, None
             halign: "center"
             valign: "middle"
+            shorten: False
             size_hint: 0.28, 0.14
             pos_hint: {"center_x": 0.25, "center_y": 0.8}
-            on_release:
+            on_release:    
                 app.open_categories_for_history()
 
         Button:
@@ -53,6 +45,7 @@
             text_size: self.width, None
             halign: "center"
             valign: "middle"
+            shorten: False
             size_hint: 0.28, 0.14
             pos_hint: {"center_x": 0.75, "center_y": 0.8}
             on_release:
@@ -61,53 +54,10 @@
         Label:
             text: 'У тебя все получится!'
             font_size: '30sp'
+            pos_hint: {"center_x": 0.5, "center_y": 0.40}
             color: 0, 0, 0, 1
-            pos_hint: {"center_x": 0.5, "center_y": 0.6}
 
 
-        # ==================================================================
-        #                   БЛОК С ДВУМЯ КРУГОВЫМИ ДИАГРАММАМИ
-        # ==================================================================
-        FloatLayout:
-            size_hint: None, None
-            size: dp(350), dp(320)
-            pos_hint: {"center_x": 0.5, "center_y": 0.35}
-
-            # ---- ЛЕВАЯ ДИАГРАММА (Доходы) ----
-            Label:
-                id: income_label
-                text: 'Доходы'
-                font_size: '24sp'
-                color: 0, 0, 0, 1
-                opacity: 0
-                pos_hint: {'center_x': 0.25, 'center_y': 0.78}
-
-            PieAnimatedChart:
-                id: pie_income
-                size_hint: None, None
-                size: dp(200), dp(200)
-                pos_hint: {"center_x": 0.25, 'center_y': 0.42}
-
-            # ---- ПРАВАЯ ДИАГРАММА (Расходы) ----
-            Label:
-                id: expense_label
-                text: 'Расходы'
-                font_size: '24sp'
-                color: 0, 0, 0, 1
-                opacity: 0
-                pos_hint: {'center_x': 0.75, 'center_y': 0.78}
-
-            PieAnimatedChart:
-                id: pie_expense
-                size_hint: None, None
-                size: dp(200), dp(200)
-                pos_hint: {"center_x": 0.75, 'center_y': 0.42}
-
-
-
-# ======================================================================
-#                             HISTORY SCREEN
-# ======================================================================
 
 <HistoryScreen>:
     FloatLayout:
@@ -127,29 +77,20 @@
 
         Label:
             text: "История операций"
+            pos_hint: {"center_x": 0.5, "center_y": 0.9}
             font_size: 24
             color: 0, 0, 0, 1
-            pos_hint: {"center_x": 0.5, "center_y": 0.9}
 
-        RecycleView:
-            id: history_rv
-            viewclass: "OperationItem"
+        ScrollView:
             size_hint: 0.95, 0.75
             pos_hint: {"center_x": 0.5, "center_y": 0.45}
 
-            RecycleBoxLayout:
-                default_size: None, dp(50)
-                default_size_hint: 1, None
+            BoxLayout:
+                id: history_box
+                orientation: "vertical"
                 size_hint_y: None
                 height: self.minimum_height
-                spacing: dp(8)
-                orientation: "vertical"
-
-
-
-# ======================================================================
-#                      OPERATION DETAIL SCREEN
-# ======================================================================
+                spacing: 10
 
 <OperationDetailScreen>:
     FloatLayout:
@@ -169,24 +110,15 @@
 
         Label:
             text: root.operation_text
-            font_size: '14sp'
-            color: 0, 0, 0, 1
             pos_hint: {"center_x": 0.5, "center_y": 0.5}
+            color: 0,0,0,1
+            font_size: '14sp'
 
-
-
-# ======================================================================
-#                    SHARED ELEMENTS / TEMPLATES
-# ======================================================================
 
 <MyToggleButton@ToggleButton>:
     allow_no_selection: False
 
 
-
-# ======================================================================
-#                          RECORD SCREEN
-# ======================================================================
 
 <RecordScreen>:
     FloatLayout:
@@ -206,20 +138,22 @@
 
         Label:
             text: "Записать операцию"
+            pos_hint: {"center_x": 0.5, "center_y": 0.9}
             font_size: 24
             color: 0, 0, 0, 1
-            pos_hint: {"center_x": 0.5, "center_y": 0.9}
 
         TextInput:
             id: operation
             hint_text: 'Впишите операцию'
-            size_hint: 0.5, 0.07
             pos_hint: {"center_x": 0.4, "center_y": 0.45}
+            size_hint: 0.5, 0.07
 
         Button:
+            id: Input
             text: "Ввод"
             size_hint: 0.17, 0.07
             pos_hint: {"center_x": 0.75, "center_y": 0.45}
+            height: 50
             on_press:
                 root.add_operation()
 
@@ -238,10 +172,6 @@
             pos_hint: {'center_x': 0.7, 'center_y': 0.35}
 
 
-
-# ======================================================================
-#                      CATEGORIES WIDGET (INSIDE SCREEN)
-# ======================================================================
 
 <CategoriesWidget>:
     FloatLayout:
@@ -262,8 +192,8 @@
         Label:
             id: info_label
             text: "У вас нет категорий"
-            font_size: '25sp'
             color: 0, 0, 0, 1
+            font_size: '25sp'
             halign: "center"
             valign: "middle"
             text_size: self.size
@@ -282,9 +212,10 @@
             id: rv
             viewclass: "CategoryButton"
             size_hint: 0.95, 0.7
-            pos_hint: {"center_x": 0.5, "top": 0.86}
+            pos_hint: {"center_x": 0.55, "y": 0.14}
 
             RecycleBoxLayout:
+                id: box
                 default_size: None, dp(50)
                 default_size_hint: 0.75, None
                 size_hint_y: None
@@ -294,48 +225,19 @@
 
 
 
-# ======================================================================
-#                       RECYCLER VIEW ITEMS
-# ======================================================================
-
-<OperationItem@FloatLayout>:
+<CategoryButton>:
     size_hint_y: None
     height: dp(50)
 
-    op_id: 0
-    full_text: ""
-    short_text: ""
-
-    Button:
-        text: root.short_text
-        size_hint: 0.85, 1
-        pos_hint: {"x": 0, "y": 0}
-        on_release:
-            app.open_operation_detail(root.full_text)
-
-    Button:
-        size_hint: 0.23, 1
-        pos_hint: {"right": 1.1, "y": 0}
-        background_normal: ''
-        background_color: 156/255, 156/255, 156/255, 1
-        on_release:
-            app.delete_operation(root.op_id)
-
-
-
-<CategoryButton@FloatLayout>:
-    size_hint_y: None
-    height: dp(50)
-    bg_color: 1,1,1,1
     category_id: 0
     text: ""
 
     Button:
         text: root.text
-        background_normal: ''
-        background_color: root.bg_color
         size_hint: 0.85, 1
         pos_hint: {"x": 0, "y": 0}
+        background_normal: ""
+        background_color: root.color_rgba
         on_release:
             app.category_selected(root.category_id, root.text)
 
@@ -349,20 +251,12 @@
 
 
 
-# ======================================================================
-#                           CATEGORY SCREEN
-# ======================================================================
-
 <CategoryScreen>:
     FloatLayout:
         CategoriesWidget:
             id: category_widget
 
 
-
-# ======================================================================
-#                       ADD CATEGORY SCREEN
-# ======================================================================
 
 <AddCategoryScreen>:
     FloatLayout:
@@ -382,39 +276,39 @@
 
         Label:
             text: 'Добавление категорий'
+            pos_hint: {"center_x": 0.5, "center_y": 0.85}
             font_size: '25sp'
             color: 0, 0, 0, 1
-            pos_hint: {"center_x": 0.5, "center_y": 0.85}
 
         TextInput:
-            id: category_input
             hint_text: 'Впишите название категории'
             size_hint: 0.6, 0.08
             pos_hint: {"center_x": 0.5, "center_y": 0.65}
             multiline: False
-
-        GridLayout:
-            id: color_grid
-            cols: 4
-            rows: 3
-            size_hint: 0.75, 0.2
-            pos_hint: {"center_x": 0.5, "center_y": 0.37}
+            id: category_input
 
         Button:
             id: addcategory
             text: 'Добавить'
-            size_hint: 0.6, 0.08
             pos_hint: {"center_x": 0.5, "center_y": 0.55}
+            size_hint: 0.6, 0.08
             on_release:
                 root.add_category()
+
+        GridLayout:
+            id: color_grid
+            cols: 3
+            size_hint: 0.6, 0.12
+            pos_hint: {"center_x": 0.55, "center_y": 0.4}
+            spacing: dp(10)
 
         Label:
             id: msg_label
             font_size: "24sp"
+            size_hint_x: None
+            pos_hint: {"center_x": 0.5, "center_y": 0.75}
+            width: "320dp"
             text_size: (self.width, "60dp")
+            height: self.text_size[1]
             halign: "center"
             valign: "middle"
-            size_hint_x: None
-            width: "320dp"
-            height: self.text_size[1]
-            pos_hint: {"center_x": 0.5, "center_y": 0.75}
