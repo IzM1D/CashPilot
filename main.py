@@ -506,6 +506,8 @@ class MainScreen(Screen):
 
     def animate_chart(self, dt):
         conn, cur = get_db()
+
+        # --- Доходы ---
         cur.execute("""
             SELECT c.name, c.color,
                    COALESCE(SUM(CASE WHEN o.type='доход' THEN o.amount_cents ELSE 0 END), 0)
@@ -513,21 +515,79 @@ class MainScreen(Screen):
             LEFT JOIN operations o ON o.category_id = c.id
             GROUP BY c.id
         """)
-        rows = cur.fetchall()
+        income_rows = cur.fetchall()
+
+        income_rows = [r for r in income_rows if r[2] > 0]
+
+        # --- Расходы ---
+        cur.execute("""
+            SELECT c.name, c.color,
+                   COALESCE(SUM(CASE WHEN o.type='расход' THEN -o.amount_cents ELSE 0 END), 0)
+            FROM categories c
+            LEFT JOIN operations o ON o.category_id = c.id
+            GROUP BY c.id
+        """)
+        expense_rows = cur.fetchall()
+
+        expense_rows = [r for r in expense_rows if r[2] > 0]
+
         conn.close()
 
-        rows = [r for r in rows if r[2] > 0]
+        # --- Анимация доходов ---
+        income_chart = self.ids.get("pie_chart_income")
+        income_label = self.ids.get("label_income")
 
-        if not rows:
-            return
+        if income_rows:
+            # показываем диаграмму
+            if income_chart:
+                income_chart.opacity = 1
+                income_chart.disabled = False
 
-        labels = [r[0] for r in rows]
-        colors = [r[1] for r in rows]
-        values = [r[2] for r in rows]
+                labels = [r[0] for r in income_rows]
+                colors = [r[1] for r in income_rows]
+                values = [r[2] for r in income_rows]
+                income_chart.start(values, colors, labels)
 
-        chart = self.ids.get("pie_chart")
-        if chart:
-            chart.start(values, colors, labels)
+            if income_label:
+                income_label.opacity = 1
+
+        else:
+            # скрываем диаграмму
+            if income_chart:
+                income_chart.opacity = 0
+                income_chart.disabled = True
+
+            if income_label:
+                income_label.opacity = 0
+
+
+
+        # --- Анимация расходов ---
+        expense_chart = self.ids.get("pie_chart_expense")
+        expense_label = self.ids.get("label_expense")
+
+        if expense_rows:
+            if expense_chart:
+                expense_chart.opacity = 1
+                expense_chart.disabled = False
+
+                labels = [r[0] for r in expense_rows]
+                colors = [r[1] for r in expense_rows]
+                values = [r[2] for r in expense_rows]
+                expense_chart.start(values, colors, labels)
+
+            if expense_label:
+                expense_label.opacity = 1
+
+        else:
+            if expense_chart:
+                expense_chart.opacity = 0
+                expense_chart.disabled = True
+
+            if expense_label:
+                expense_label.opacity = 0
+
+
 
 
 

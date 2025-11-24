@@ -58,29 +58,40 @@
             color: 0, 0, 0, 1
 
         # Контейнер для диаграммы — по центру, чуть ниже заголовка
+        # --- Две диаграммы рядом ---
         FloatLayout:
             size_hint: None, None
-            size: dp(320), dp(320)
+            size: dp(360), dp(320)
             pos_hint: {"center_x": 0.5, "center_y": 0.35}
 
-            canvas.before:
-                Color:
-                    rgba: 1, 1, 1, 0
-                Rectangle:
-                    pos: self.pos
-                    size: self.size
-
+            # ---- Левая диаграмма: ДОХОДЫ ----
             Label:
+                id: label_income
                 text: 'Доходы'
                 font_size: '24sp'
-                pos_hint: {'center_x': 0.23, 'center_y': 0.65}
+                pos_hint: {'center_x': 0.25, 'center_y': 0.65}
                 color: 0, 0, 0, 1
 
             PieAnimatedChart:
-                id: pie_chart
+                id: pie_chart_income
                 size_hint: None, None
                 size: dp(200), dp(200)
-                pos_hint: {"center_x": 0.23, 'center_y': 0.3}
+                pos_hint: {"center_x": 0.25, 'center_y': 0.28}
+
+            # ---- Правая диаграмма: РАСХОДЫ ----
+            Label:
+                id: label_expense
+                text: 'Расходы'
+                font_size: '24sp'
+                pos_hint: {'center_x': 0.75, 'center_y': 0.65}
+                color: 0, 0, 0, 1
+
+            PieAnimatedChart:
+                id: pie_chart_expense
+                size_hint: None, None
+                size: dp(200), dp(200)
+                pos_hint: {"center_x": 0.75, 'center_y': 0.28}
+
 
 
 
