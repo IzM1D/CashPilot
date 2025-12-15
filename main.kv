@@ -42,7 +42,7 @@
         Button:
             text: 'Записать операцию'
             font_size: '14sp'
-            text_size: self.width, None
+            text_size: self.width, self.height
             halign: "center"
             valign: "middle"
             shorten: False
@@ -75,8 +75,8 @@
             PieAnimatedChart:
                 id: pie_chart_income
                 size_hint: None, None
-                size: dp(200), dp(200)
-                pos_hint: {"center_x": 0.25, 'center_y': 0.28}
+                size: dp(300), dp(300)
+                pos_hint: {"center_x": 0.267, 'center_y': 0.28}
 
             # ---- Правая диаграмма: РАСХОДЫ ----
             Label:
@@ -89,8 +89,8 @@
             PieAnimatedChart:
                 id: pie_chart_expense
                 size_hint: None, None
-                size: dp(200), dp(200)
-                pos_hint: {"center_x": 0.75, 'center_y': 0.28}
+                size: dp(300), dp(300)
+                pos_hint: {"center_x": 0.767, 'center_y': 0.28}
 
 
 
@@ -114,7 +114,9 @@
 
         Label:
             text: "История операций"
-            pos_hint: {"center_x": 0.5, "center_y": 0.9}
+            font_size: '24sp'
+            text_size: None, None
+            pos_hint: {"center_x": 0.5, "center_y": 0.87}
             font_size: 24
             color: 0, 0, 0, 1
 
@@ -301,13 +303,15 @@
         background_normal: ''
         background_color: root.bg_color
         size_hint: 0.85, 1
-        pos_hint: {"x": 0, "y": 0}
+        pos_hint: {"x": 0.1, "y": 0}
         on_release:
             app.category_selected(root.category_id, root.text)
 
     Button:
+        text: 'X'
+        font_size: '24sp'
         size_hint: 0.23, 1
-        pos_hint: {"right": 1.1, "y": 0}
+        pos_hint: {"right": 1.2, "y": 0}
         background_normal: ''
         background_color: 156/255, 156/255, 156/255, 1
         on_release:

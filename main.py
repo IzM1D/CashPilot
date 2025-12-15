@@ -1,3 +1,4 @@
+__version__ = '1.0'
 from kivy.config import Config
 Config.set('graphics', 'width', '360')
 Config.set('graphics', 'height', '800')
@@ -9,6 +10,8 @@ from decimal import Decimal
 from datetime import datetime, timezone, timedelta
 
 # matplotlib + kivy image
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from kivy.core.image import Image as CoreImage
 from kivy.clock import Clock
@@ -29,10 +32,10 @@ import matplotlib.patheffects as pe
 DB_NAME = "data.db"
 
 CATEGORY_COLORS = [
-    "#808080", "#000000",
-    "#8B4513", "#FF0000", "#FFA500", "#FFFF00",
-    "#00FF00", "#008000", "#00FFFF",
-    "#0000FF", "#800080", "#FF00FF",
+    "#9AA0A6", "#1F1F1F",
+    "#7A4A2E", "#D64545", "#E67E22", "#F1C40F",
+    "#A3CB38", "#2ECC71", "#48C9B0",
+    "#3498DB", "#8E44AD", "#C0398E",
 ]
 
 # --- Работа с базой данных ---
@@ -48,7 +51,7 @@ def init_db():
     cur.execute("""CREATE TABLE IF NOT EXISTS categories (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT UNIQUE,
-                    color TEXT DEFAULT '#000000'
+                    color TEXT DEFAULT '#1F1F1F'
                   );""")
     cur.execute("""CREATE TABLE IF NOT EXISTS operations (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -82,20 +85,10 @@ def delete_category_from_db(category_id):
 # PieChart widget (matplotlib -> texture)
 # ---------------------------
 class PieChart(Image):
-    """
-    Image widget that draws a pie chart via matplotlib and sets its texture.
-    Метод draw(data) ожидает список записей (label, value, hex_color).
-    Если сумма значений == 0, рисует плоский круг-серый фон с надписью "Нет доходов".
-    """
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        # не анимируем автоматически — будем обновлять при входе на экран/по требованию
 
     def draw(self, data, dpi=120, size_px=320):
-        """
-        data: list of tuples (label:str, value:float, hex_color:str)
-        size_px: итоговый размер в пикселях (ширина=высота)
-        """
         total = sum([v for _, v, _ in data])
         # подготовим фигуру
         fig, ax = plt.subplots(figsize=(size_px/ dpi, size_px/ dpi), dpi=dpi)
@@ -110,7 +103,6 @@ class PieChart(Image):
             ax.set(aspect="equal")
             ax.text(0, 0, "Нет\nдоходов", ha='center', va='center', fontsize=14)
         else:
-            # уберём нулевые сектора (они не рисуются)
             labels = []
             sizes = []
             colors = []
@@ -118,15 +110,14 @@ class PieChart(Image):
                 if val > 0:
                     labels.append(lbl)
                     sizes.append(val)
-                    colors.append(hexc if hexc else '#000000')
+                    colors.append(hexc if hexc else '#1F1F1F')
 
             def autopct(pct):
-                # показываем проценты с одной цифрой после запятой, но только если >0.5%
                 return ('{:.1f}%'.format(pct)) if pct > 0.5 else ''
 
             wedges, texts, autotexts = ax.pie(
                 sizes,
-                labels=None,  # подписи не пишем рядом — ставим только проценты на секторах
+                labels=None,
                 colors=colors,
                 startangle=90,
                 counterclock=False,
@@ -221,56 +212,79 @@ class CategoriesWidget(FloatLayout):
 class PieAnimatedChart(Image):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.frames = []      # сюда будем складывать все кадры
         self.progress = 0
-        self.fps = 1 / 120
-        self.speed = 0.1
+        self.fps = 1 / 30
+        self.speed = 0.05
         self.values = []
         self.colors = []
         self.labels = []
         self._anim_event = None
+        self._last_values = None
+        self._last_colors = None
+        self._last_labels = None
+
 
     def start(self, values, colors, labels):
-        # сохраняем данные
+        # Если данные не изменились, просто показываем последний кадр
+        if (values == self._last_values and
+            colors == self._last_colors and
+            labels == self._last_labels):
+            if self.frames:
+                self.texture = self.frames[-1]  # показываем последний кадр
+            return  # не пересоздаём frames
+
+        # Сохраняем новые данные
+        self._last_values = list(values)
+        self._last_colors = list(colors)
+        self._last_labels = list(labels)
+
+        # Сохраняем для анимации
         self.values = values
         self.colors = colors
         self.labels = labels
 
-        # сбрасываем анимацию
+        # Предрендерим кадры
+        self.frames = self._generate_frames()
+
+        # Сброс прогресса и запуск анимации
         self.progress = 0
         if self._anim_event:
             self._anim_event.cancel()
-
-        # запуск анимации
         self._anim_event = Clock.schedule_interval(self._update, self.fps)
 
-    def _update(self, dt):
-        if self.progress >= 1:
-            self.progress = 1
-            self._draw(self.progress)
-            return False  # стоп анимации
 
-        self._draw(self.progress)
-        self.progress += self.speed
+    def _generate_frames(self):
+        frames = []
+        steps = int(1 / self.speed) + 1  # количество кадров
+        for i in range(steps):
+            progress = i * self.speed
+            if progress > 1:
+                progress = 1
+            # создаём кадр как раньше
+            buf = self._draw_frame(progress)
+            frames.append(CoreImage(buf, ext='png').texture)
+        return frames
 
-    def _draw(self, progress):
-        if not self.values:
-            return
+    def _draw_frame(self, progress):
+        # возвращает BytesIO с PNG кадром
+        import matplotlib.pyplot as plt
+        import io
+        import numpy as np
+        import matplotlib.patheffects as pe
 
-        fig, ax = plt.subplots(figsize=(3.2, 3.2), dpi=100)
+        w, h = self.size
+        fig, ax = plt.subplots(figsize=(w/100, h/100), dpi=100)  # масштаб под размер виджета
+
         fig.patch.set_alpha(0)
 
         total = sum(self.values)
         if total == 0:
             plt.close(fig)
-            return
+            return io.BytesIO()
 
-        # масштабируем значениями прогресса
         scaled = [(v / total) * progress for v in self.values]
-
-        # гарантируем, что сектор не исчезает полностью
         safe_scaled = [max(v, 0.0001) for v in scaled]
-
-        # добавляем ПРОЗРАЧНЫЙ остаток — ОТВЕЧАЕТ ЗА АНИМАЦИЮ
         remainder = max(0, 1 - progress)
         sizes = safe_scaled + [remainder]
         colors = list(self.colors) + [(0, 0, 0, 0)]
@@ -285,25 +299,20 @@ class PieAnimatedChart(Image):
             wedgeprops={'linewidth': 0}
         )
 
-        # --- подписи из второго варианта ---
-        for i, w in enumerate(wedges[:-1]):  # последний — прозрачный сектор
-            theta1, theta2 = w.theta1, w.theta2
-            theta_mid = (theta1 + theta2) / 2
+        for i, w in enumerate(wedges[:-1]):
+            theta_mid = (w.theta1 + w.theta2) / 2
             ang = np.deg2rad(theta_mid)
-
             r = 0.65
             x = r * np.cos(ang)
             y = r * np.sin(ang)
 
-            # название категории
             ax.text(
                 x, y + 0.07, self.labels[i],
                 ha='center', va='center',
-                fontsize=11, color='white', weight='bold',
+                fontsize=12, color='white', weight='bold',
                 path_effects=[pe.withStroke(linewidth=1, foreground="black")]
             )
 
-            # процент от полного массива (как во втором варианте)
             pct = f"{100 * self.values[i] / total:.1f}%"
             ax.text(
                 x, y - 0.08, pct,
@@ -315,16 +324,20 @@ class PieAnimatedChart(Image):
         ax.set(aspect='equal')
 
         buf = io.BytesIO()
-        plt.savefig(
-            buf, format='png',
-            transparent=True,
-            bbox_inches='tight',
-            pad_inches=0
-        )
+        plt.savefig(buf, format='png', transparent=True, bbox_inches='tight', pad_inches=0)
         plt.close(fig)
-
         buf.seek(0)
-        self.texture = CoreImage(buf, ext='png').texture
+        return buf
+
+    def _update(self, dt):
+        if self.progress >= len(self.frames):
+            self.progress = len(self.frames) - 1
+            self.texture = self.frames[-1]
+            return False
+
+        self.texture = self.frames[int(self.progress)]
+        self.progress += 1
+
 
 
 
@@ -438,7 +451,7 @@ class MainApp(App):
         screen.load_history()
 
 class AddCategoryScreen(Screen):
-    selected_color = "#000000"
+    selected_color = "#1F1F1F"
     def on_enter(self):
         grid = self.ids.get("color_grid")
         if not grid:
@@ -456,26 +469,36 @@ class AddCategoryScreen(Screen):
         self.selected_color = color
         print("Выбран цвет:", color)
 
+    from kivy.clock import Clock
+
     def add_category(self):
         name = self.ids.category_input.text.strip()
         msg = self.ids.msg_label
+
+        def clear_msg(dt):
+            msg.text = ""
+
         if not name:
             msg.text = "Ошибка: имя категории пустое"
             msg.color = (1, 0, 0, 1)
             msg.halign = "center"
             msg.valign = "middle"
             msg.text_size = msg.size
+            Clock.schedule_once(clear_msg, 3)  # текст исчезнет через 3 секунды
             return
+
         short_name = name[:13] + "..." if len(name) > 13 else name
         conn, cur = get_db()
         cur.execute("SELECT id FROM categories WHERE name = ?", (name,))
         exists = cur.fetchone()
+
         if exists:
             msg.text = f"Ошибка: категория '{short_name}' уже существует"
             msg.color = (1, 0, 0, 1)
             msg.halign = "center"
             msg.valign = "middle"
             msg.text_size = msg.size
+            Clock.schedule_once(clear_msg, 3)
         else:
             cur.execute(
                 "INSERT INTO categories (name, color) VALUES (?, ?)",
@@ -487,9 +510,12 @@ class AddCategoryScreen(Screen):
             msg.halign = "center"
             msg.valign = "middle"
             msg.text_size = msg.size
+            Clock.schedule_once(clear_msg, 3)
+
         cur.close()
         conn.close()
         self.ids.category_input.text = ""
+
 
 class CategoryButton(FloatLayout):
     category_id = NumericProperty(0)
@@ -701,6 +727,19 @@ class RecordScreen(Screen):
             self.add_widget(self.error_label)
             return
 
+        # ---- проверка на 0 ----
+        if amount_cents == 0:
+            self.error_label = Label(
+                text="Сумма не может быть 0",
+                color=(1, 0, 0, 1),
+                font_size='24sp',
+                size_hint=(None, None),
+                size=(self.ids.operation.width, 30),
+                pos_hint={"center_x": 0.5, "center_y": 0.6}
+            )
+            self.add_widget(self.error_label)
+            return
+
         # 3. Определяем тип операции
         if self.ids.income.state == "down":
             type_op = "доход"
@@ -762,6 +801,24 @@ class RecordScreen(Screen):
                 size=(self.ids.operation.width, 30),
                 pos_hint={"center_x": 0.5, "center_y": 0.6}
             )
+        else:
+            try:
+                value = Decimal(text)
+            except:
+                # не число
+                ...
+            if value == 0:
+                # показываем сообщение об ошибке
+                self.error_label = Label(
+                    text="Сумма не может быть 0",
+                    color=(1, 0, 0, 1),
+                    font_size='24sp',
+                    size_hint=(None, None),
+                    size=(self.ids.operation.width, 30),
+                    pos_hint={"center_x": 0.5, "center_y": 0.6}
+                )
+                self.add_widget(self.error_label)
+                return
             self.add_widget(self.error_label)
             return
 
