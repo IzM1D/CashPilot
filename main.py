@@ -212,79 +212,56 @@ class CategoriesWidget(FloatLayout):
 class PieAnimatedChart(Image):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.frames = []      # сюда будем складывать все кадры
         self.progress = 0
-        self.fps = 1 / 30
-        self.speed = 0.05
+        self.fps = 1 / 120
+        self.speed = 0.1
         self.values = []
         self.colors = []
         self.labels = []
         self._anim_event = None
-        self._last_values = None
-        self._last_colors = None
-        self._last_labels = None
-
 
     def start(self, values, colors, labels):
-        # Если данные не изменились, просто показываем последний кадр
-        if (values == self._last_values and
-            colors == self._last_colors and
-            labels == self._last_labels):
-            if self.frames:
-                self.texture = self.frames[-1]  # показываем последний кадр
-            return  # не пересоздаём frames
-
-        # Сохраняем новые данные
-        self._last_values = list(values)
-        self._last_colors = list(colors)
-        self._last_labels = list(labels)
-
-        # Сохраняем для анимации
+        # сохраняем данные
         self.values = values
         self.colors = colors
         self.labels = labels
 
-        # Предрендерим кадры
-        self.frames = self._generate_frames()
-
-        # Сброс прогресса и запуск анимации
+        # сбрасываем анимацию
         self.progress = 0
         if self._anim_event:
             self._anim_event.cancel()
+
+        # запуск анимации
         self._anim_event = Clock.schedule_interval(self._update, self.fps)
 
+    def _update(self, dt):
+        if self.progress >= 1:
+            self.progress = 1
+            self._draw(self.progress)
+            return False  # стоп анимации
 
-    def _generate_frames(self):
-        frames = []
-        steps = int(1 / self.speed) + 1  # количество кадров
-        for i in range(steps):
-            progress = i * self.speed
-            if progress > 1:
-                progress = 1
-            # создаём кадр как раньше
-            buf = self._draw_frame(progress)
-            frames.append(CoreImage(buf, ext='png').texture)
-        return frames
+        self._draw(self.progress)
+        self.progress += self.speed
 
-    def _draw_frame(self, progress):
-        # возвращает BytesIO с PNG кадром
-        import matplotlib.pyplot as plt
-        import io
-        import numpy as np
-        import matplotlib.patheffects as pe
+    def _draw(self, progress):
+        if not self.values:
+            return
 
-        w, h = self.size
-        fig, ax = plt.subplots(figsize=(w/100, h/100), dpi=100)  # масштаб под размер виджета
-
+        fig, ax = plt.subplots(figsize=(3.2, 3.2), dpi=100)
         fig.patch.set_alpha(0)
 
         total = sum(self.values)
         if total == 0:
             plt.close(fig)
-            return io.BytesIO()
+            return
 
+        # масштабируем значениями прогресса
         scaled = [(v / total) * progress for v in self.values]
+
+        # гарантируем, что сектор не исчезает полностью
         safe_scaled = [max(v, 0.0001) for v in scaled]
+
+        # добавляем ПРОЗРАЧНЫЙ остаток — ОТВЕЧАЕТ ЗА АНИМАЦИЮ
         remainder = max(0, 1 - progress)
         sizes = safe_scaled + [remainder]
         colors = list(self.colors) + [(0, 0, 0, 0)]
@@ -299,20 +276,25 @@ class PieAnimatedChart(Image):
             wedgeprops={'linewidth': 0}
         )
 
-        for i, w in enumerate(wedges[:-1]):
-            theta_mid = (w.theta1 + w.theta2) / 2
+        # --- подписи из второго варианта ---
+        for i, w in enumerate(wedges[:-1]):  # последний — прозрачный сектор
+            theta1, theta2 = w.theta1, w.theta2
+            theta_mid = (theta1 + theta2) / 2
             ang = np.deg2rad(theta_mid)
+
             r = 0.65
             x = r * np.cos(ang)
             y = r * np.sin(ang)
 
+            # название категории
             ax.text(
                 x, y + 0.07, self.labels[i],
                 ha='center', va='center',
-                fontsize=12, color='white', weight='bold',
+                fontsize=9, color='white', weight='bold',
                 path_effects=[pe.withStroke(linewidth=1, foreground="black")]
             )
 
+            # процент от полного массива (как во втором варианте)
             pct = f"{100 * self.values[i] / total:.1f}%"
             ax.text(
                 x, y - 0.08, pct,
@@ -324,20 +306,16 @@ class PieAnimatedChart(Image):
         ax.set(aspect='equal')
 
         buf = io.BytesIO()
-        plt.savefig(buf, format='png', transparent=True, bbox_inches='tight', pad_inches=0)
+        plt.savefig(
+            buf, format='png',
+            transparent=True,
+            bbox_inches='tight',
+            pad_inches=0
+        )
         plt.close(fig)
+
         buf.seek(0)
-        return buf
-
-    def _update(self, dt):
-        if self.progress >= len(self.frames):
-            self.progress = len(self.frames) - 1
-            self.texture = self.frames[-1]
-            return False
-
-        self.texture = self.frames[int(self.progress)]
-        self.progress += 1
-
+        self.texture = CoreImage(buf, ext='png').texture
 
 
 
@@ -515,7 +493,6 @@ class AddCategoryScreen(Screen):
         cur.close()
         conn.close()
         self.ids.category_input.text = ""
-
 
 class CategoryButton(FloatLayout):
     category_id = NumericProperty(0)
@@ -727,19 +704,6 @@ class RecordScreen(Screen):
             self.add_widget(self.error_label)
             return
 
-        # ---- проверка на 0 ----
-        if amount_cents == 0:
-            self.error_label = Label(
-                text="Сумма не может быть 0",
-                color=(1, 0, 0, 1),
-                font_size='24sp',
-                size_hint=(None, None),
-                size=(self.ids.operation.width, 30),
-                pos_hint={"center_x": 0.5, "center_y": 0.6}
-            )
-            self.add_widget(self.error_label)
-            return
-
         # 3. Определяем тип операции
         if self.ids.income.state == "down":
             type_op = "доход"
@@ -801,24 +765,6 @@ class RecordScreen(Screen):
                 size=(self.ids.operation.width, 30),
                 pos_hint={"center_x": 0.5, "center_y": 0.6}
             )
-        else:
-            try:
-                value = Decimal(text)
-            except:
-                # не число
-                ...
-            if value == 0:
-                # показываем сообщение об ошибке
-                self.error_label = Label(
-                    text="Сумма не может быть 0",
-                    color=(1, 0, 0, 1),
-                    font_size='24sp',
-                    size_hint=(None, None),
-                    size=(self.ids.operation.width, 30),
-                    pos_hint={"center_x": 0.5, "center_y": 0.6}
-                )
-                self.add_widget(self.error_label)
-                return
             self.add_widget(self.error_label)
             return
 
